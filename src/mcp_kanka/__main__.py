@@ -28,6 +28,11 @@ from .tools import (
     handle_update_entities,
     handle_update_posts,
 )
+from .types import VALID_ENTITY_TYPES
+
+# JSON-schema enum shared by every tool that accepts an entity_type.
+# Keeping this in one place ensures find_entities and create_entities never drift.
+_ENTITY_TYPE_ENUM: list[str] = list(VALID_ENTITY_TYPES)
 
 # Load environment variables
 load_dotenv()
@@ -80,16 +85,7 @@ async def list_tools() -> list[types.Tool]:
                     },
                     "entity_type": {
                         "type": "string",
-                        "enum": [
-                            "character",
-                            "creature",
-                            "location",
-                            "organization",
-                            "race",
-                            "note",
-                            "journal",
-                            "quest",
-                        ],
+                        "enum": _ENTITY_TYPE_ENUM,
                         "description": "Entity type to filter by",
                     },
                     "name": {
@@ -158,16 +154,7 @@ async def list_tools() -> list[types.Tool]:
                             "properties": {
                                 "entity_type": {
                                     "type": "string",
-                                    "enum": [
-                                        "character",
-                                        "creature",
-                                        "location",
-                                        "organization",
-                                        "race",
-                                        "note",
-                                        "journal",
-                                        "quest",
-                                    ],
+                                    "enum": _ENTITY_TYPE_ENUM,
                                     "description": "Entity type",
                                 },
                                 "name": {

@@ -4,6 +4,7 @@
 
 import logging
 import os
+from datetime import datetime
 from typing import Any
 
 from kanka import KankaClient
@@ -12,6 +13,8 @@ from kanka.models import (
     Character,
     Creature,
     Entity,
+    Event,
+    Family,
     Journal,
     Location,
     Note,
@@ -22,36 +25,244 @@ from kanka.models import (
 )
 
 from .converter import ContentConverter
-from .types import EntityType
+from .types import HTTP_BACKED_TYPES, MANAGER_BACKED_TYPES, EntityType
 
 logger = logging.getLogger(__name__)
 
 
-class KankaService:
-    """Service layer wrapping the python-kanka client."""
+# Reverse map: Kanka API's `type` field (as returned by /entities/<id>) to our
+# internal entity_type. British → American spelling for organisation.
+KANKA_TYPE_TO_OUR: dict[str, str] = {
+    "ability": "ability",
+    "calendar": "calendar",
+    "character": "character",
+    "creature": "creature",
+    "event": "event",
+    "family": "family",
+    "item": "item",
+    "journal": "journal",
+    "location": "location",
+    "note": "note",
+    "organisation": "organization",
+    "quest": "quest",
+    "race": "race",
+    "tag": "tag",
+    "timeline": "timeline",
+}
 
-    # Map entity types to their model classes
+
+def _parse_dt(value: Any) -> datetime | None:
+    """Parse an ISO 8601 datetime string into a datetime (or return None).
+
+    Kanka returns timestamps like ``2023-04-01T12:34:56.000000Z``. Python's
+    ``fromisoformat`` accepts the ``Z`` suffix from 3.11+, but we normalize
+    to ``+00:00`` just in case a later runtime narrows behavior.
+    """
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError:
+        return None
+
+
+class _HttpEntityFacade:
+    """Attribute-access façade over a raw Kanka API dict.
+
+    Used for HTTP-backed entity types (ability, item, timeline) so the existing
+    ``_entity_to_dict`` code path (which expects pydantic-model-like objects
+    with ``.id``, ``.entity_id``, ``.name``, ``.created_at``, etc.) works
+    without a branch.
+
+    The façade parses timestamp strings into datetimes so that
+    ``entity.created_at.isoformat()`` still works.
+    """
+
+    __slots__ = ("_data",)
+
+    def __init__(self, data: dict[str, Any]):
+        # Store a shallow copy so upstream code can't mutate the API response.
+        self._data = dict(data)
+
+    def __getattr__(self, name: str) -> Any:
+        # Called only if normal attribute lookup fails.
+        if name in ("created_at", "updated_at"):
+            return _parse_dt(self._data.get(name))
+        if name in self._data:
+            val = self._data[name]
+            # Auto-wrap lists of dicts (e.g. nested posts when related=True)
+            # so downstream code that uses attribute access (``post.id``,
+            # ``post.name``) works transparently.
+            if (
+                isinstance(val, list)
+                and val
+                and all(isinstance(x, dict) for x in val)
+            ):
+                return [_HttpEntityFacade(x) for x in val]
+            return val
+        # Match pydantic behavior: raise AttributeError for missing.
+        raise AttributeError(name)
+
+    def __hasattr__(self, name: str) -> bool:  # pragma: no cover - not used
+        return name in self._data
+
+    # hasattr() falls through to __getattr__ and treats AttributeError as
+    # "no such attribute", so the above is sufficient.
+
+
+class _HttpEntityShim:
+    """Duck-typed EntityManager for HTTP-backed types.
+
+    Implements the subset of the python-kanka ``EntityManager`` interface that
+    ``KankaService`` uses: ``list``, ``get``, ``create``, ``update``,
+    ``delete``, ``list_posts``, ``create_post``, ``update_post``,
+    ``delete_post``, and the ``has_next_page`` property.
+    """
+
+    def __init__(self, client: KankaClient, endpoint: str) -> None:
+        self.client = client
+        self.endpoint = endpoint
+        self._last_has_next: bool = False
+
+    @property
+    def has_next_page(self) -> bool:
+        return self._last_has_next
+
+    def list(
+        self,
+        page: int = 1,
+        related: bool = False,
+        **filters: Any,
+    ) -> list[_HttpEntityFacade]:
+        params: dict[str, Any] = {"page": page}
+        if related:
+            params["related"] = 1
+        # python-kanka uses ``lastSync``. Kanka accepts it on all list endpoints.
+        for k, v in filters.items():
+            if v is not None:
+                params[k] = v
+        resp = self.client._request("GET", self.endpoint, params=params)
+        self._last_has_next = bool((resp.get("links") or {}).get("next"))
+        return [_HttpEntityFacade(item) for item in resp.get("data", [])]
+
+    def get(self, id: int) -> _HttpEntityFacade:
+        resp = self.client._request("GET", f"{self.endpoint}/{id}")
+        return _HttpEntityFacade(resp.get("data") or {})
+
+    def create(self, **data: Any) -> _HttpEntityFacade:
+        resp = self.client._request("POST", self.endpoint, json=data)
+        return _HttpEntityFacade(resp.get("data") or {})
+
+    def update(self, id: int, **data: Any) -> _HttpEntityFacade:
+        resp = self.client._request("PUT", f"{self.endpoint}/{id}", json=data)
+        return _HttpEntityFacade(resp.get("data") or {})
+
+    def delete(self, id: int) -> None:
+        self.client._request("DELETE", f"{self.endpoint}/{id}")
+
+    def list_posts(
+        self, entity_id: int, page: int = 1, limit: int = 100
+    ) -> list[_HttpEntityFacade]:
+        params: dict[str, Any] = {"page": page}
+        resp = self.client._request(
+            "GET", f"entities/{entity_id}/posts", params=params
+        )
+        return [_HttpEntityFacade(item) for item in resp.get("data", [])][:limit]
+
+    def create_post(
+        self,
+        entity_id: int,
+        *,
+        name: str,
+        entry: str = "",
+        visibility_id: int = 1,
+        **extra: Any,
+    ) -> _HttpEntityFacade:
+        data = {
+            "name": name,
+            "entry": entry,
+            "visibility_id": visibility_id,
+        }
+        data.update({k: v for k, v in extra.items() if v is not None})
+        resp = self.client._request(
+            "POST", f"entities/{entity_id}/posts", json=data
+        )
+        return _HttpEntityFacade(resp.get("data") or {})
+
+    def update_post(
+        self,
+        entity_id: int,
+        post_id: int,
+        *,
+        visibility_id: int | None = None,
+        **fields: Any,
+    ) -> _HttpEntityFacade:
+        data = {k: v for k, v in fields.items() if v is not None}
+        if visibility_id is not None:
+            data["visibility_id"] = visibility_id
+        resp = self.client._request(
+            "PATCH", f"entities/{entity_id}/posts/{post_id}", json=data
+        )
+        return _HttpEntityFacade(resp.get("data") or {})
+
+    def delete_post(self, entity_id: int, post_id: int) -> None:
+        self.client._request("DELETE", f"entities/{entity_id}/posts/{post_id}")
+
+
+class KankaService:
+    """Service layer wrapping the python-kanka client.
+
+    Manager-backed entity types (those with a python-kanka EntityManager) route
+    through ``getattr(self.client, endpoint)`` and use pydantic models. HTTP-
+    backed types (ability, item, timeline) go through
+    ``self.client._request(...)`` and return raw dicts, which are then normalized
+    by ``_http_data_to_dict`` into the same result shape.
+    """
+
+    # Map entity types to their pydantic model classes. Only manager-backed
+    # types appear here. HTTP-backed types (ability, item, timeline) have no
+    # python-kanka model.
     ENTITY_TYPE_MAP = {
         "character": Character,
         "creature": Creature,
-        "location": Location,
-        "organization": Organisation,  # Note: Kanka uses "organisation"
-        "race": Race,
-        "note": Note,
+        "event": Event,
+        "family": Family,
         "journal": Journal,
+        "location": Location,
+        "note": Note,
+        "organization": Organisation,  # British spelling in API
         "quest": Quest,
+        "race": Race,
+        "tag": Tag,
     }
 
-    # Map entity types to their Kanka API endpoints
+    # Map entity types to their Kanka API endpoint paths.
+    # Covers both manager-backed and HTTP-backed types.
     API_ENDPOINT_MAP = {
+        # manager-backed
+        "calendar": "calendars",
         "character": "characters",
         "creature": "creatures",
-        "location": "locations",
-        "organization": "organisations",  # API uses British spelling
-        "race": "races",
-        "note": "notes",
+        "event": "events",
+        "family": "families",
         "journal": "journals",
+        "location": "locations",
+        "note": "notes",
+        "organization": "organisations",  # British spelling in API
         "quest": "quests",
+        "race": "races",
+        "tag": "tags",
+        # HTTP-backed (no python-kanka manager)
+        "ability": "abilities",
+        "item": "items",
+        "timeline": "timelines",
     }
 
     def __init__(self) -> None:
@@ -67,6 +278,29 @@ class KankaService:
         self.client = KankaClient(token=token, campaign_id=int(campaign_id))
         self.converter = ContentConverter()
         self._tag_cache: dict[str, Tag] = {}
+        # Cache HTTP shims by entity type so ``has_next_page`` stays consistent
+        # across paginated calls for the same type (mirroring how python-kanka's
+        # managers keep their ``_last_links`` state).
+        self._http_shims: dict[str, _HttpEntityShim] = {}
+
+    def _get_manager(self, entity_type: str) -> Any:
+        """Return an object that quacks like ``EntityManager`` for this type.
+
+        For manager-backed types this is the real ``python-kanka`` manager.
+        For HTTP-backed types (ability, item, timeline) it's an
+        ``_HttpEntityShim`` that speaks the same interface via raw HTTP.
+        """
+        endpoint = self.API_ENDPOINT_MAP.get(entity_type)
+        if endpoint is None:
+            raise ValueError(f"Unknown entity type: {entity_type!r}")
+        if entity_type in HTTP_BACKED_TYPES:
+            shim = self._http_shims.get(entity_type)
+            if shim is None:
+                shim = _HttpEntityShim(self.client, endpoint)
+                self._http_shims[entity_type] = shim
+            return shim
+        # Manager-backed
+        return getattr(self.client, endpoint)
 
     def search_entities(
         self,
@@ -93,7 +327,7 @@ class KankaService:
 
             if entity_type:
                 # Search specific entity type
-                manager = getattr(self.client, self.API_ENDPOINT_MAP[entity_type])
+                manager = self._get_manager(entity_type)
 
                 # Use name filter to search - it does partial matching!
                 results = manager.list(name=query, limit=limit)
@@ -111,11 +345,11 @@ class KankaService:
                 # We'll need to query each type separately
                 remaining_limit = limit
 
-                for our_type, manager_name in self.API_ENDPOINT_MAP.items():
+                for our_type in self.API_ENDPOINT_MAP:
                     if remaining_limit <= 0:
                         break
 
-                    manager = getattr(self.client, manager_name)
+                    manager = self._get_manager(our_type)
 
                     # Get up to remaining_limit results from this type
                     type_limit = min(remaining_limit, 100)  # API max is 100
@@ -167,7 +401,7 @@ class KankaService:
             List of entity objects
         """
         try:
-            manager = getattr(self.client, self.API_ENDPOINT_MAP[entity_type])
+            manager = self._get_manager(entity_type)
 
             # Build filters
             filters = {}
@@ -290,24 +524,10 @@ class KankaService:
             entity_type = found_entity.get("type")
 
             # Map to our internal type
-            our_type = None
-            if entity_type == "character":
-                our_type = "character"
-            elif entity_type == "creature":
-                our_type = "creature"
-            elif entity_type == "location":
-                our_type = "location"
-            elif entity_type == "organisation":
-                our_type = "organization"
-            elif entity_type == "race":
-                our_type = "race"
-            elif entity_type == "note":
-                our_type = "note"
-            elif entity_type == "journal":
-                our_type = "journal"
-            elif entity_type == "quest":
-                our_type = "quest"
-            else:
+            # Map the Kanka API's ``type`` field to our internal entity_type.
+            # This includes both manager-backed and HTTP-backed types.
+            our_type = KANKA_TYPE_TO_OUR.get(entity_type or "")
+            if our_type is None:
                 return None
 
             # The entity endpoint returns the data in 'child' field
@@ -322,7 +542,7 @@ class KankaService:
 
             # Now use the type-specific manager to get a proper entity object
             # This gives us consistent data format with datetime objects
-            manager = getattr(self.client, self.API_ENDPOINT_MAP[our_type])
+            manager = self._get_manager(our_type)
             entity = manager.get(type_id)
 
             # Use _entity_to_dict to handle all conversions consistently
@@ -332,7 +552,7 @@ class KankaService:
             if include_posts:
                 try:
                     # Get the manager for this entity type
-                    manager = getattr(self.client, self.API_ENDPOINT_MAP[our_type])
+                    manager = self._get_manager(our_type)
                     # Use entity_id, not the type-specific id
                     posts = manager.list_posts(entity_id, limit=100)
                     result["posts"] = [self._post_to_dict(post) for post in posts]
@@ -376,7 +596,7 @@ class KankaService:
             Created entity data
         """
         try:
-            manager = getattr(self.client, self.API_ENDPOINT_MAP[entity_type])
+            manager = self._get_manager(entity_type)
 
             # Prepare data
             data: dict[str, Any] = {"name": name}
@@ -468,7 +688,7 @@ class KankaService:
                 raise ValueError(f"Entity {entity_id} not found")
 
             entity_type = entity_data["entity_type"]
-            manager = getattr(self.client, self.API_ENDPOINT_MAP[entity_type])
+            manager = self._get_manager(entity_type)
 
             # Prepare update data
             data: dict[str, Any] = {"name": name}
@@ -525,7 +745,7 @@ class KankaService:
                 raise ValueError(f"Entity {entity_id} not found")
 
             entity_type = entity_data["entity_type"]
-            manager = getattr(self.client, self.API_ENDPOINT_MAP[entity_type])
+            manager = self._get_manager(entity_type)
 
             # Delete entity
             manager.delete(entity_data["id"])
@@ -561,7 +781,7 @@ class KankaService:
                 raise ValueError(f"Entity {entity_id} not found")
 
             entity_type = entity_data["entity_type"]
-            manager = getattr(self.client, self.API_ENDPOINT_MAP[entity_type])
+            manager = self._get_manager(entity_type)
 
             # Convert markdown to HTML if entry provided
             html_entry = self.converter.markdown_to_html(entry) if entry else None
@@ -614,7 +834,7 @@ class KankaService:
                 raise ValueError(f"Entity {entity_id} not found")
 
             entity_type = entity_data["entity_type"]
-            manager = getattr(self.client, self.API_ENDPOINT_MAP[entity_type])
+            manager = self._get_manager(entity_type)
 
             # Prepare update data
             kwargs: dict[str, Any] = {"name": name}
@@ -656,7 +876,7 @@ class KankaService:
                 raise ValueError(f"Entity {entity_id} not found")
 
             entity_type = entity_data["entity_type"]
-            manager = getattr(self.client, self.API_ENDPOINT_MAP[entity_type])
+            manager = self._get_manager(entity_type)
 
             # Delete post - use entity_id, not the type-specific id
             manager.delete_post(entity_id, post_id)

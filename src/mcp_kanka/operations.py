@@ -11,11 +11,13 @@ from typing import Any
 
 from .service import KankaService, get_service
 from .types import (
+    VALID_ENTITY_TYPES,
     CheckEntityUpdatesResult,
     CreateEntityResult,
     CreatePostResult,
     DeleteEntityResult,
     DeletePostResult,
+    EntityType,
     GetEntityResult,
     UpdateEntityResult,
     UpdatePostResult,
@@ -119,19 +121,10 @@ class KankaOperations:
             Dictionary with entities and sync_info
         """
         # Validate entity type if provided
-        valid_types = [
-            "character",
-            "creature",
-            "location",
-            "organization",
-            "race",
-            "note",
-            "journal",
-            "quest",
-        ]
-        if entity_type and entity_type not in valid_types:
+        if entity_type and entity_type not in VALID_ENTITY_TYPES:
             logger.error(
-                f"Invalid entity_type: {entity_type}. Must be one of: {', '.join(valid_types)}"
+                f"Invalid entity_type: {entity_type}. "
+                f"Must be one of: {', '.join(VALID_ENTITY_TYPES)}"
             )
             return {"entities": [], "sync_info": {}}
 
@@ -146,8 +139,6 @@ class KankaOperations:
                     # Cast to EntityType since we validated it above
                     from typing import cast
 
-                    from .types import EntityType
-
                     entity_objects = self.service.list_entities(
                         cast(EntityType, entity_type),
                         page=1,
@@ -160,18 +151,7 @@ class KankaOperations:
                         entities.append(entity_dict)
                 else:
                     # Search across all entity types
-                    from .types import EntityType
-
-                    entity_types: list[EntityType] = [
-                        "character",
-                        "creature",
-                        "location",
-                        "organization",
-                        "race",
-                        "note",
-                        "journal",
-                        "quest",
-                    ]
+                    entity_types: list[EntityType] = list(VALID_ENTITY_TYPES)  # type: ignore[arg-type]
                     for et in entity_types:
                         try:
                             entity_objects = self.service.list_entities(
@@ -212,8 +192,6 @@ class KankaOperations:
                 # Get all entities of this type
                 # Cast to EntityType since we validated it above
                 from typing import cast
-
-                from .types import EntityType
 
                 entity_objects = self.service.list_entities(
                     cast(EntityType, entity_type),
@@ -310,23 +288,13 @@ class KankaOperations:
             List of results, one per entity (success or failure)
         """
         results = []
-        valid_types = [
-            "character",
-            "creature",
-            "location",
-            "organization",
-            "race",
-            "note",
-            "journal",
-            "quest",
-        ]
 
         for entity_input in entities:
             entity_type = entity_input.get("entity_type")
             entity_name = entity_input.get("name", "")
 
             # Validate entity type
-            if not entity_type or entity_type not in valid_types:
+            if not entity_type or entity_type not in VALID_ENTITY_TYPES:
                 logger.error(
                     f"Invalid entity_type '{entity_type}' for entity '{entity_name}'"
                 )
@@ -336,7 +304,10 @@ class KankaOperations:
                     "name": entity_name,
                     "mention": None,
                     "success": False,
-                    "error": f"Invalid entity_type '{entity_type}'. Must be one of: {', '.join(valid_types)}",
+                    "error": (
+                        f"Invalid entity_type '{entity_type}'. "
+                        f"Must be one of: {', '.join(VALID_ENTITY_TYPES)}"
+                    ),
                 }
                 results.append(error_result)
                 continue

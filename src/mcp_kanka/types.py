@@ -2,17 +2,88 @@
 
 from typing import Literal, TypedDict
 
-# Supported entity types
+# Supported entity types.
+#
+# The upstream mcp-kanka (1.x) supported 8: character, creature, location,
+# organization, race, note, journal, quest.
+#
+# This Scorrpine fork extends coverage with 7 more Kanka API entity types:
+# calendar, event, family, item, ability, timeline, and tag (as a first-class
+# entity, in addition to still being usable as a filter parameter on other
+# entities).
 EntityType = Literal[
+    "ability",
+    "calendar",
     "character",
     "creature",
-    "location",
-    "organization",
-    "race",
-    "note",
+    "event",
+    "family",
+    "item",
     "journal",
+    "location",
+    "note",
+    "organization",
     "quest",
+    "race",
+    "tag",
+    "timeline",
 ]
+
+# Shared runtime constant for validation / schema generation.
+# Kept in tuple form so it's ordered and hashable.
+VALID_ENTITY_TYPES: tuple[str, ...] = (
+    "ability",
+    "calendar",
+    "character",
+    "creature",
+    "event",
+    "family",
+    "item",
+    "journal",
+    "location",
+    "note",
+    "organization",
+    "quest",
+    "race",
+    "tag",
+    "timeline",
+)
+
+# Types where python-kanka has a Manager class we can use for CRUD.
+#
+# Note: `calendar` is intentionally *not* here even though python-kanka 2.6.2
+# ships a Calendar manager. The upstream Calendar pydantic model declares
+# ``parameters: str | None`` but the API returns a dict (e.g. ``{"layout": null}``),
+# causing a validation error. We route calendars through raw HTTP instead until
+# upstream fixes the model.
+MANAGER_BACKED_TYPES: frozenset[str] = frozenset(
+    {
+        "character",
+        "creature",
+        "event",
+        "family",
+        "journal",
+        "location",
+        "note",
+        "organization",  # maps to python-kanka's "organisations" manager
+        "quest",
+        "race",
+        "tag",
+    }
+)
+
+# Types where python-kanka does NOT have a working Manager class. For these we
+# go through KankaClient._request(...) directly.
+HTTP_BACKED_TYPES: frozenset[str] = frozenset(
+    {"ability", "calendar", "item", "timeline"}
+)
+
+assert MANAGER_BACKED_TYPES.isdisjoint(HTTP_BACKED_TYPES), (
+    "Entity type must be either manager-backed or HTTP-backed, not both"
+)
+assert set(VALID_ENTITY_TYPES) == MANAGER_BACKED_TYPES | HTTP_BACKED_TYPES, (
+    "VALID_ENTITY_TYPES must equal the union of manager-backed and HTTP-backed sets"
+)
 
 
 # Request types
