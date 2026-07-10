@@ -6,11 +6,15 @@ from typing import Any
 from .operations import get_operations
 from .types import (
     CheckEntityUpdatesResult,
+    CreateAttributeResult,
     CreateEntityResult,
     CreatePostResult,
+    DeleteAttributeResult,
     DeleteEntityResult,
     DeletePostResult,
     GetEntityResult,
+    ListAttributesResult,
+    UpdateAttributeResult,
     UpdateEntityResult,
     UpdatePostResult,
 )
@@ -188,3 +192,38 @@ async def handle_check_entity_updates(**params: Any) -> CheckEntityUpdatesResult
 
     # Delegate to operations layer
     return await operations.check_entity_updates(entity_ids, last_synced)
+
+
+# =============================================================================
+# Attributes (Phase C)
+# =============================================================================
+
+
+async def handle_list_attributes(**params: Any) -> ListAttributesResult:
+    """List all attributes on an entity."""
+    entity_id = params.get("entity_id")
+    if not entity_id:
+        raise ValueError("entity_id parameter is required")
+    operations = get_operations()
+    return await operations.list_attributes(entity_id)
+
+
+async def handle_create_attributes(**params: Any) -> list[CreateAttributeResult]:
+    """Create one or more attributes on entities."""
+    attributes = params.get("attributes", [])
+    operations = get_operations()
+    return await operations.create_attributes(attributes)
+
+
+async def handle_update_attributes(**params: Any) -> list[UpdateAttributeResult]:
+    """Update existing attributes."""
+    updates = params.get("updates", [])
+    operations = get_operations()
+    return await operations.update_attributes(updates)
+
+
+async def handle_delete_attributes(**params: Any) -> list[DeleteAttributeResult]:
+    """Delete attributes from entities."""
+    deletions = params.get("deletions", [])
+    operations = get_operations()
+    return await operations.delete_attributes(deletions)

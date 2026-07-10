@@ -19,20 +19,25 @@ from pydantic import AnyUrl
 from .resources import get_kanka_context
 from .tools import (
     handle_check_entity_updates,
+    handle_create_attributes,
     handle_create_entities,
     handle_create_posts,
+    handle_delete_attributes,
     handle_delete_entities,
     handle_delete_posts,
     handle_find_entities,
     handle_get_entities,
+    handle_list_attributes,
+    handle_update_attributes,
     handle_update_entities,
     handle_update_posts,
 )
-from .types import VALID_ENTITY_TYPES
+from .types import VALID_ATTRIBUTE_TYPES, VALID_ENTITY_TYPES
 
 # JSON-schema enum shared by every tool that accepts an entity_type.
 # Keeping this in one place ensures find_entities and create_entities never drift.
 _ENTITY_TYPE_ENUM: list[str] = list(VALID_ENTITY_TYPES)
+_ATTRIBUTE_TYPE_ENUM: list[str] = list(VALID_ATTRIBUTE_TYPES)
 
 # Load environment variables
 load_dotenv()
@@ -371,6 +376,148 @@ async def list_tools() -> list[types.Tool]:
                 "required": ["entity_ids", "last_synced"],
             },
         ),
+        types.Tool(
+            name="list_attributes",
+            description=(
+                "List all attributes on an entity. Attributes are the key-value "
+                "store on any entity (HP, AC, stats, currency, damage counters, "
+                "etc.). Types: standard (text), number, checkbox, section (header), "
+                "random (dice expression)."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "entity_id": {
+                        "type": "integer",
+                        "description": "The entity_id whose attributes to list",
+                    },
+                },
+                "required": ["entity_id"],
+            },
+        ),
+        types.Tool(
+            name="create_attributes",
+            description="Create one or more attributes on entities",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "attributes": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "entity_id": {
+                                    "type": "integer",
+                                    "description": "Entity to attach the attribute to",
+                                },
+                                "name": {
+                                    "type": "string",
+                                    "description": "Attribute name (e.g., 'HP', 'AC')",
+                                },
+                                "value": {
+                                    "type": "string",
+                                    "description": (
+                                        "Attribute value. For checkbox use '1'/'0'; "
+                                        "for section leave omitted; for random use "
+                                        "a dice expression like '1d20+5'."
+                                    ),
+                                },
+                                "type": {
+                                    "type": "string",
+                                    "enum": _ATTRIBUTE_TYPE_ENUM,
+                                    "description": (
+                                        "Attribute type. Defaults to 'standard'."
+                                    ),
+                                },
+                                "is_pinned": {
+                                    "type": "boolean",
+                                    "description": "Pin at top of attribute list",
+                                },
+                                "is_private": {
+                                    "type": "boolean",
+                                    "description": "Hidden from players (admin-only)",
+                                },
+                                "is_star": {
+                                    "type": "boolean",
+                                    "description": "Mark as important (starred)",
+                                },
+                                "default_order": {
+                                    "type": "integer",
+                                    "description": "Sort order among attributes",
+                                },
+                                "api_key": {
+                                    "type": "string",
+                                    "description": (
+                                        "Optional stable key for programmatic lookup"
+                                    ),
+                                },
+                            },
+                            "required": ["entity_id", "name"],
+                        },
+                    },
+                },
+                "required": ["attributes"],
+            },
+        ),
+        types.Tool(
+            name="update_attributes",
+            description="Update existing attributes on entities",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "updates": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "entity_id": {
+                                    "type": "integer",
+                                    "description": "Entity holding the attribute",
+                                },
+                                "attribute_id": {
+                                    "type": "integer",
+                                    "description": "The attribute ID to update",
+                                },
+                                "name": {"type": "string"},
+                                "value": {"type": "string"},
+                                "type": {
+                                    "type": "string",
+                                    "enum": _ATTRIBUTE_TYPE_ENUM,
+                                },
+                                "is_pinned": {"type": "boolean"},
+                                "is_private": {"type": "boolean"},
+                                "is_star": {"type": "boolean"},
+                                "default_order": {"type": "integer"},
+                                "api_key": {"type": "string"},
+                            },
+                            "required": ["entity_id", "attribute_id"],
+                        },
+                    },
+                },
+                "required": ["updates"],
+            },
+        ),
+        types.Tool(
+            name="delete_attributes",
+            description="Delete attributes from entities",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "deletions": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "entity_id": {"type": "integer"},
+                                "attribute_id": {"type": "integer"},
+                            },
+                            "required": ["entity_id", "attribute_id"],
+                        },
+                    },
+                },
+                "required": ["deletions"],
+            },
+        ),
     ]
 
 
@@ -399,6 +546,14 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
             result = await handle_delete_posts(**arguments)
         elif name == "check_entity_updates":
             result = await handle_check_entity_updates(**arguments)
+        elif name == "list_attributes":
+            result = await handle_list_attributes(**arguments)
+        elif name == "create_attributes":
+            result = await handle_create_attributes(**arguments)
+        elif name == "update_attributes":
+            result = await handle_update_attributes(**arguments)
+        elif name == "delete_attributes":
+            result = await handle_delete_attributes(**arguments)
         else:
             raise ValueError(f"Unknown tool: {name}")
 

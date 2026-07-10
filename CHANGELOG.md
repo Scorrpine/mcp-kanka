@@ -2,6 +2,53 @@
 
 All notable changes to this fork are documented here. This fork is based on [ervwalter/mcp-kanka](https://github.com/ervwalter/mcp-kanka).
 
+## [2.0.0a3] - 2026-07-10
+
+### Phase C: Attribute CRUD
+
+Adds full CRUD support for Kanka entity attributes: the per-entity key-value store used for HP, AC, ability scores, currency, damage counters, spell slots, etc. This is arguably the biggest RPG-value phase of the fork.
+
+Four new MCP tools:
+- `list_attributes(entity_id)` — read all attributes on an entity
+- `create_attributes(attributes: [...])` — batch create
+- `update_attributes(updates: [...])` — batch update
+- `delete_attributes(deletions: [...])` — batch delete
+
+Tool count grows from 9 to 13.
+
+### Attribute types
+
+All 5 Kanka attribute types are supported by string name; the fork translates to the numeric `type_id` under the hood:
+
+| Type | `type_id` | Notes |
+|---|---|---|
+| `standard` | 1 | Text value. Default when `type` is omitted. |
+| `number` | 2 | Numeric value (stored as string). |
+| `checkbox` | 3 | Boolean. Send `"1"`/`"0"` or truthy string; response has `value: true`/`false`. |
+| `section` | 4 | Header/divider. `value` should be omitted. |
+| `random` | 5 | Dice-expression value, e.g. `"1d6+2"`. Kanka parses on display. |
+
+Type-id mapping verified against a live campaign on 2026-07-10.
+
+### Batch semantics
+
+All three write tools accept arrays and return per-item results. A malformed item (missing `entity_id`/`name`/`attribute_id`, invalid type) fails only that item; the rest still execute. Each result contains `success` and `error` for granular feedback.
+
+### Additional attribute fields exposed
+
+- `is_pinned` — pin at top of the entity's attribute list
+- `is_private` — admin-only visibility
+- `is_star` — mark as important
+- `default_order` — sort index
+- `api_key` — stable programmatic key
+- `parsed` — Kanka's rendered form (read-only, included in list responses)
+
+### Tests
+
+- 23 new tests in `tests/unit/test_attributes.py`: type-id mapping round-trip, payload construction (empty-none, invalid-type rejection, flag pass-through), `_attribute_to_dict` normalization (null/unknown type_id, boolean coercion, checkbox bool value preservation), service HTTP verb correctness (`GET/POST/PATCH/DELETE` and endpoint URLs), batch aggregation with per-item success/failure.
+- Full suite: 214 baseline + 23 new = 237 tests passing.
+- Live campaign round-trip: created + listed + updated + deleted one attribute of each type (5 total) against a scratch character. Also verified that a batch with 2 malformed items and 5 valid items returns 7 results (5 success + 2 failure) and never short-circuits.
+
 ## [2.0.0a2] - 2026-07-10
 
 ### Phase B: Extended entity type coverage

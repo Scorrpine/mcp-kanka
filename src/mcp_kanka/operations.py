@@ -13,12 +13,16 @@ from .service import KankaService, get_service
 from .types import (
     VALID_ENTITY_TYPES,
     CheckEntityUpdatesResult,
+    CreateAttributeResult,
     CreateEntityResult,
     CreatePostResult,
+    DeleteAttributeResult,
     DeleteEntityResult,
     DeletePostResult,
     EntityType,
     GetEntityResult,
+    ListAttributesResult,
+    UpdateAttributeResult,
     UpdateEntityResult,
     UpdatePostResult,
 )
@@ -724,6 +728,200 @@ class KankaOperations:
         except Exception as e:
             logger.error(f"Check entity updates failed: {e}")
             raise
+
+    # =========================================================================
+    # Attributes (Phase C)
+    # =========================================================================
+
+    async def list_attributes(self, entity_id: int) -> ListAttributesResult:
+        """List all attributes on an entity.
+
+        Args:
+            entity_id: Entity ID.
+
+        Returns:
+            Result with attributes list plus success/error status.
+        """
+        try:
+            attrs = self.service.list_attributes(entity_id)
+            return {
+                "entity_id": entity_id,
+                "attributes": attrs,
+                "success": True,
+                "error": None,
+            }
+        except Exception as e:
+            logger.error(f"list_attributes failed for entity {entity_id}: {e}")
+            return {
+                "entity_id": entity_id,
+                "attributes": [],
+                "success": False,
+                "error": str(e),
+            }
+
+    async def create_attributes(
+        self, attributes: list[dict[str, Any]]
+    ) -> list[CreateAttributeResult]:
+        """Batch-create attributes across (potentially multiple) entities.
+
+        Each input dict must have ``entity_id`` and ``name``. Other fields
+        (``value``, ``type``, ``is_pinned``, etc.) are optional. Returns one
+        result per input, preserving order.
+        """
+        results: list[CreateAttributeResult] = []
+        for item in attributes:
+            entity_id = item.get("entity_id")
+            name = item.get("name", "")
+            if not entity_id or not name:
+                results.append(
+                    {
+                        "entity_id": entity_id or 0,
+                        "attribute_id": None,
+                        "name": name,
+                        "success": False,
+                        "error": "entity_id and name are required",
+                    }
+                )
+                continue
+            try:
+                created = self.service.create_attribute(
+                    entity_id=entity_id,
+                    name=name,
+                    value=item.get("value"),
+                    type=item.get("type"),
+                    is_pinned=item.get("is_pinned"),
+                    is_private=item.get("is_private"),
+                    is_star=item.get("is_star"),
+                    default_order=item.get("default_order"),
+                    api_key=item.get("api_key"),
+                )
+                results.append(
+                    {
+                        "entity_id": entity_id,
+                        "attribute_id": created.get("id"),
+                        "name": name,
+                        "success": True,
+                        "error": None,
+                    }
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to create attribute {name!r} on entity "
+                    f"{entity_id}: {e}"
+                )
+                results.append(
+                    {
+                        "entity_id": entity_id,
+                        "attribute_id": None,
+                        "name": name,
+                        "success": False,
+                        "error": str(e),
+                    }
+                )
+        return results
+
+    async def update_attributes(
+        self, updates: list[dict[str, Any]]
+    ) -> list[UpdateAttributeResult]:
+        """Batch-update attributes.
+
+        Each input dict must have ``entity_id`` and ``attribute_id``. Any
+        combination of ``name``, ``value``, ``type``, ``is_pinned``,
+        ``is_private``, ``is_star``, ``default_order``, ``api_key`` may be
+        supplied to change.
+        """
+        results: list[UpdateAttributeResult] = []
+        for item in updates:
+            entity_id = item.get("entity_id")
+            attribute_id = item.get("attribute_id")
+            if not entity_id or not attribute_id:
+                results.append(
+                    {
+                        "entity_id": entity_id or 0,
+                        "attribute_id": attribute_id or 0,
+                        "success": False,
+                        "error": "entity_id and attribute_id are required",
+                    }
+                )
+                continue
+            try:
+                self.service.update_attribute(
+                    entity_id=entity_id,
+                    attribute_id=attribute_id,
+                    name=item.get("name"),
+                    value=item.get("value"),
+                    type=item.get("type"),
+                    is_pinned=item.get("is_pinned"),
+                    is_private=item.get("is_private"),
+                    is_star=item.get("is_star"),
+                    default_order=item.get("default_order"),
+                    api_key=item.get("api_key"),
+                )
+                results.append(
+                    {
+                        "entity_id": entity_id,
+                        "attribute_id": attribute_id,
+                        "success": True,
+                        "error": None,
+                    }
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to update attribute {attribute_id} on entity "
+                    f"{entity_id}: {e}"
+                )
+                results.append(
+                    {
+                        "entity_id": entity_id,
+                        "attribute_id": attribute_id,
+                        "success": False,
+                        "error": str(e),
+                    }
+                )
+        return results
+
+    async def delete_attributes(
+        self, deletions: list[dict[str, Any]]
+    ) -> list[DeleteAttributeResult]:
+        """Batch-delete attributes."""
+        results: list[DeleteAttributeResult] = []
+        for item in deletions:
+            entity_id = item.get("entity_id")
+            attribute_id = item.get("attribute_id")
+            if not entity_id or not attribute_id:
+                results.append(
+                    {
+                        "entity_id": entity_id or 0,
+                        "attribute_id": attribute_id or 0,
+                        "success": False,
+                        "error": "entity_id and attribute_id are required",
+                    }
+                )
+                continue
+            try:
+                self.service.delete_attribute(entity_id, attribute_id)
+                results.append(
+                    {
+                        "entity_id": entity_id,
+                        "attribute_id": attribute_id,
+                        "success": True,
+                        "error": None,
+                    }
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to delete attribute {attribute_id} from entity "
+                    f"{entity_id}: {e}"
+                )
+                results.append(
+                    {
+                        "entity_id": entity_id,
+                        "attribute_id": attribute_id,
+                        "success": False,
+                        "error": str(e),
+                    }
+                )
+        return results
 
 
 # Global instance management

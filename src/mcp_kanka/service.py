@@ -25,7 +25,16 @@ from kanka.models import (
 )
 
 from .converter import ContentConverter
-from .types import HTTP_BACKED_TYPES, MANAGER_BACKED_TYPES, EntityType
+from .types import (
+    ATTRIBUTE_ID_TO_TYPE,
+    ATTRIBUTE_TYPE_TO_ID,
+    HTTP_BACKED_TYPES,
+    MANAGER_BACKED_TYPES,
+    VALID_ATTRIBUTE_TYPES,
+    AttributeData,
+    AttributeType,
+    EntityType,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1086,6 +1095,203 @@ class KankaService:
             result["entry"] = None
 
         return result
+
+    # =========================================================================
+    # Attributes (Phase C)
+    # =========================================================================
+
+    def list_attributes(self, entity_id: int) -> list[AttributeData]:
+        """List all attributes on an entity.
+
+        Args:
+            entity_id: The entity_id (not the type-specific id).
+
+        Returns:
+            List of normalized attribute dicts.
+        """
+        try:
+            resp = self.client._request(
+                "GET", f"entities/{entity_id}/attributes"
+            )
+            return [self._attribute_to_dict(a) for a in resp.get("data", [])]
+        except Exception as e:
+            logger.error(f"list_attributes failed for entity {entity_id}: {e}")
+            raise
+
+    def create_attribute(
+        self,
+        entity_id: int,
+        name: str,
+        value: str | None = None,
+        type: AttributeType | None = None,
+        is_pinned: bool | None = None,
+        is_private: bool | None = None,
+        is_star: bool | None = None,
+        default_order: int | None = None,
+        api_key: str | None = None,
+    ) -> AttributeData:
+        """Create an attribute on an entity.
+
+        Args:
+            entity_id: The entity to attach the attribute to.
+            name: Attribute name (required).
+            value: Attribute value. For ``checkbox`` supply ``"1"``/``"0"``
+                or truthy string; for ``section`` leave as ``None``.
+            type: One of ``standard`` (default), ``number``, ``checkbox``,
+                ``section``, ``random``.
+            is_pinned: Pin to the top of the entity's attribute list.
+            is_private: Hidden from players (admin-only).
+            is_star: Mark as important (starred).
+            default_order: Numeric sort order.
+            api_key: Optional stable key for programmatic lookup.
+
+        Returns:
+            The created attribute (normalized).
+        """
+        payload = self._attribute_payload(
+            name=name,
+            value=value,
+            type=type,
+            is_pinned=is_pinned,
+            is_private=is_private,
+            is_star=is_star,
+            default_order=default_order,
+            api_key=api_key,
+        )
+        # ``name`` is required by the Kanka API.
+        payload["name"] = name
+        try:
+            resp = self.client._request(
+                "POST", f"entities/{entity_id}/attributes", json=payload
+            )
+            return self._attribute_to_dict(resp.get("data") or {})
+        except Exception as e:
+            logger.error(
+                f"create_attribute failed for entity {entity_id} ({name!r}): {e}"
+            )
+            raise
+
+    def update_attribute(
+        self,
+        entity_id: int,
+        attribute_id: int,
+        name: str | None = None,
+        value: str | None = None,
+        type: AttributeType | None = None,
+        is_pinned: bool | None = None,
+        is_private: bool | None = None,
+        is_star: bool | None = None,
+        default_order: int | None = None,
+        api_key: str | None = None,
+    ) -> AttributeData:
+        """Update an attribute on an entity."""
+        payload = self._attribute_payload(
+            name=name,
+            value=value,
+            type=type,
+            is_pinned=is_pinned,
+            is_private=is_private,
+            is_star=is_star,
+            default_order=default_order,
+            api_key=api_key,
+        )
+        if not payload:
+            raise ValueError(
+                "update_attribute needs at least one field to update"
+            )
+        try:
+            resp = self.client._request(
+                "PATCH",
+                f"entities/{entity_id}/attributes/{attribute_id}",
+                json=payload,
+            )
+            return self._attribute_to_dict(resp.get("data") or {})
+        except Exception as e:
+            logger.error(
+                f"update_attribute failed for entity {entity_id} "
+                f"attribute {attribute_id}: {e}"
+            )
+            raise
+
+    def delete_attribute(self, entity_id: int, attribute_id: int) -> bool:
+        """Delete an attribute from an entity."""
+        try:
+            self.client._request(
+                "DELETE", f"entities/{entity_id}/attributes/{attribute_id}"
+            )
+            return True
+        except Exception as e:
+            logger.error(
+                f"delete_attribute failed for entity {entity_id} "
+                f"attribute {attribute_id}: {e}"
+            )
+            raise
+
+    def _attribute_payload(
+        self,
+        name: str | None,
+        value: str | None,
+        type: AttributeType | None,
+        is_pinned: bool | None,
+        is_private: bool | None,
+        is_star: bool | None,
+        default_order: int | None,
+        api_key: str | None,
+    ) -> dict[str, Any]:
+        """Build a POST/PATCH payload for an attribute.
+
+        Only sends fields the caller explicitly set. Translates the
+        user-facing ``type`` string into Kanka's numeric ``type_id``.
+        """
+        payload: dict[str, Any] = {}
+        if name is not None:
+            payload["name"] = name
+        if value is not None:
+            payload["value"] = value
+        if type is not None:
+            if type not in VALID_ATTRIBUTE_TYPES:
+                raise ValueError(
+                    f"Invalid attribute type {type!r}. "
+                    f"Must be one of: {', '.join(VALID_ATTRIBUTE_TYPES)}"
+                )
+            payload["type_id"] = ATTRIBUTE_TYPE_TO_ID[type]
+        if is_pinned is not None:
+            payload["is_pinned"] = is_pinned
+        if is_private is not None:
+            payload["is_private"] = is_private
+        if is_star is not None:
+            payload["is_star"] = is_star
+        if default_order is not None:
+            payload["default_order"] = default_order
+        if api_key is not None:
+            payload["api_key"] = api_key
+        return payload
+
+    @staticmethod
+    def _attribute_to_dict(raw: dict[str, Any]) -> AttributeData:
+        """Convert a raw Kanka attribute dict to our normalized shape.
+
+        Translates numeric ``type_id`` back to the user-friendly ``type``
+        string and preserves the raw ``type_id`` alongside for debugging.
+        """
+        type_id = raw.get("type_id")
+        type_str = ATTRIBUTE_ID_TO_TYPE.get(type_id, "standard") if type_id else "standard"
+        return {
+            "id": raw.get("id"),
+            "entity_id": raw.get("entity_id"),
+            "name": raw.get("name", ""),
+            "value": raw.get("value"),
+            "type": type_str,  # type: ignore[typeddict-item]
+            "type_id": type_id or ATTRIBUTE_TYPE_TO_ID["standard"],
+            "is_pinned": bool(raw.get("is_pinned", False)),
+            "is_private": bool(raw.get("is_private", False)),
+            "is_star": bool(raw.get("is_star", False)),
+            "default_order": raw.get("default_order", 0),
+            "api_key": raw.get("api_key"),
+            "parsed": raw.get("parsed"),
+            "created_at": raw.get("created_at"),
+            "updated_at": raw.get("updated_at"),
+        }
 
 
 # Global service instance (initialized on first use)

@@ -1,6 +1,6 @@
 """Type definitions for the Kanka MCP server."""
 
-from typing import Literal, TypedDict
+from typing import Any, Literal, TypedDict
 
 # Supported entity types.
 #
@@ -84,6 +84,43 @@ assert MANAGER_BACKED_TYPES.isdisjoint(HTTP_BACKED_TYPES), (
 assert set(VALID_ENTITY_TYPES) == MANAGER_BACKED_TYPES | HTTP_BACKED_TYPES, (
     "VALID_ENTITY_TYPES must equal the union of manager-backed and HTTP-backed sets"
 )
+
+
+# =============================================================================
+# Attribute types (Phase C)
+# =============================================================================
+
+# User-facing attribute type names. The Kanka API stores these as a numeric
+# ``type_id`` field but the string form is friendlier for AI callers. This fork
+# translates one to the other transparently.
+AttributeType = Literal[
+    "standard",
+    "number",
+    "checkbox",
+    "section",
+    "random",
+]
+
+VALID_ATTRIBUTE_TYPES: tuple[str, ...] = (
+    "standard",
+    "number",
+    "checkbox",
+    "section",
+    "random",
+)
+
+# Kanka's numeric ``type_id`` for each attribute type, verified against a live
+# campaign on 2026-07-10.
+ATTRIBUTE_TYPE_TO_ID: dict[str, int] = {
+    "standard": 1,
+    "number": 2,
+    "checkbox": 3,
+    "section": 4,
+    "random": 5,
+}
+ATTRIBUTE_ID_TO_TYPE: dict[int, str] = {v: k for k, v in ATTRIBUTE_TYPE_TO_ID.items()}
+
+assert set(VALID_ATTRIBUTE_TYPES) == set(ATTRIBUTE_TYPE_TO_ID.keys())
 
 
 # Request types
@@ -395,3 +432,127 @@ class CheckEntityUpdatesResult(TypedDict):
     modified_entity_ids: list[int]
     deleted_entity_ids: list[int]  # If API provides this
     check_timestamp: str  # ISO 8601 timestamp
+
+
+# =============================================================================
+# Attribute request / response types (Phase C)
+# =============================================================================
+
+
+class AttributeInput(TypedDict, total=False):
+    """Input for creating an attribute on an entity.
+
+    ``entity_id``, ``name`` are required. ``type`` defaults to ``"standard"``.
+    """
+
+    entity_id: int
+    name: str
+    value: str | None  # For checkbox: "1"/"0" or true/false; None for section.
+    type: AttributeType | None
+    is_pinned: bool | None  # Show at top of entity's attribute list.
+    is_private: bool | None  # Hidden from players (admin-only).
+    is_star: bool | None  # Marked as important.
+    default_order: int | None  # Sort order among the entity's attributes.
+    api_key: str | None  # Optional stable key for programmatic lookup.
+
+
+class AttributeUpdate(TypedDict, total=False):
+    """Update for an existing attribute. ``entity_id`` and ``attribute_id`` required."""
+
+    entity_id: int
+    attribute_id: int
+    name: str | None
+    value: str | None
+    type: AttributeType | None
+    is_pinned: bool | None
+    is_private: bool | None
+    is_star: bool | None
+    default_order: int | None
+    api_key: str | None
+
+
+class AttributeDeletion(TypedDict):
+    """Delete an attribute from an entity."""
+
+    entity_id: int
+    attribute_id: int
+
+
+class AttributeData(TypedDict, total=False):
+    """Normalized attribute data returned to callers."""
+
+    id: int
+    entity_id: int
+    name: str
+    value: Any  # str for text/number/random, bool for checkbox, None for section.
+    type: AttributeType  # User-friendly type string.
+    type_id: int  # Raw Kanka type_id, exposed for debugging.
+    is_pinned: bool
+    is_private: bool
+    is_star: bool
+    default_order: int
+    api_key: str | None
+    parsed: str | None  # Kanka's parsed/rendered form of the value.
+    created_at: str | None
+    updated_at: str | None
+
+
+class ListAttributesParams(TypedDict):
+    """Parameters for list_attributes tool."""
+
+    entity_id: int
+
+
+class ListAttributesResult(TypedDict):
+    """Result of listing attributes on an entity."""
+
+    entity_id: int
+    attributes: list[AttributeData]
+    success: bool
+    error: str | None
+
+
+class CreateAttributesParams(TypedDict):
+    """Parameters for create_attributes tool."""
+
+    attributes: list[AttributeInput]
+
+
+class CreateAttributeResult(TypedDict):
+    """Per-attribute result of a batch create."""
+
+    entity_id: int
+    attribute_id: int | None
+    name: str
+    success: bool
+    error: str | None
+
+
+class UpdateAttributesParams(TypedDict):
+    """Parameters for update_attributes tool."""
+
+    updates: list[AttributeUpdate]
+
+
+class UpdateAttributeResult(TypedDict):
+    """Per-attribute result of a batch update."""
+
+    entity_id: int
+    attribute_id: int
+    success: bool
+    error: str | None
+
+
+class DeleteAttributesParams(TypedDict):
+    """Parameters for delete_attributes tool."""
+
+    deletions: list[AttributeDeletion]
+
+
+class DeleteAttributeResult(TypedDict):
+    """Per-attribute result of a batch delete."""
+
+    entity_id: int
+    attribute_id: int
+    success: bool
+    error: str | None
