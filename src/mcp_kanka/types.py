@@ -556,3 +556,129 @@ class DeleteAttributeResult(TypedDict):
     attribute_id: int
     success: bool
     error: str | None
+
+
+# =============================================================================
+# Relation request / response types (Phase D)
+# =============================================================================
+
+
+class RelationInput(TypedDict, total=False):
+    """Input for creating a relation between two entities.
+
+    ``owner_id``, ``target_id``, and ``relation`` are required. If ``two_way``
+    is true, Kanka creates a mirror relation on the target entity's side and
+    cross-links the two via ``mirror_id``.
+    """
+
+    owner_id: int
+    target_id: int
+    relation: str  # Free-text label like "friend", "father", "rival".
+    attitude: int | None  # -100 to 100 (attitude/disposition score).
+    colour: str | None  # Hex colour or empty string.
+    is_star: bool | None  # Marked as important.
+    is_pinned: bool | None  # Pin to top of the entity's relation list.
+    is_hidden: bool | None  # Admin-only visibility. Maps to visibility_id=2.
+    two_way: bool | None  # Also create the mirror on the target's side.
+
+
+class RelationUpdate(TypedDict, total=False):
+    """Update for an existing relation. ``entity_id`` and ``relation_id`` required."""
+
+    entity_id: int  # Owner entity_id (URL path).
+    relation_id: int  # The Kanka relation ID.
+    owner_id: int | None
+    target_id: int | None
+    relation: str | None
+    attitude: int | None
+    colour: str | None
+    is_star: bool | None
+    is_pinned: bool | None
+    is_hidden: bool | None
+
+
+class RelationDeletion(TypedDict):
+    """Delete a relation. Deleting a two-way relation removes both sides."""
+
+    entity_id: int  # Owner entity_id (URL path).
+    relation_id: int
+
+
+class RelationData(TypedDict, total=False):
+    """Normalized relation data returned to callers."""
+
+    id: int
+    owner_id: int
+    target_id: int
+    relation: str
+    attitude: int | None
+    colour: str
+    is_star: bool
+    is_pinned: bool
+    is_hidden: bool
+    is_two_way: bool  # Derived from mirror_id being non-null.
+    mirror_id: int | None
+    created_at: str | None
+    updated_at: str | None
+
+
+class ListRelationsParams(TypedDict):
+    """Parameters for list_relations tool."""
+
+    entity_id: int
+
+
+class ListRelationsResult(TypedDict):
+    """Result of listing relations on an entity."""
+
+    entity_id: int
+    relations: list[RelationData]
+    success: bool
+    error: str | None
+
+
+class CreateRelationsParams(TypedDict):
+    """Parameters for create_relations tool."""
+
+    relations: list[RelationInput]
+
+
+class CreateRelationResult(TypedDict):
+    """Per-relation result of a batch create."""
+
+    owner_id: int
+    target_id: int
+    relation_id: int | None
+    mirror_id: int | None  # Populated when two_way=true.
+    success: bool
+    error: str | None
+
+
+class UpdateRelationsParams(TypedDict):
+    """Parameters for update_relations tool."""
+
+    updates: list[RelationUpdate]
+
+
+class UpdateRelationResult(TypedDict):
+    """Per-relation result of a batch update."""
+
+    entity_id: int
+    relation_id: int
+    success: bool
+    error: str | None
+
+
+class DeleteRelationsParams(TypedDict):
+    """Parameters for delete_relations tool."""
+
+    deletions: list[RelationDeletion]
+
+
+class DeleteRelationResult(TypedDict):
+    """Per-relation result of a batch delete."""
+
+    entity_id: int
+    relation_id: int
+    success: bool
+    error: str | None

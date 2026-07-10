@@ -2,6 +2,48 @@
 
 All notable changes to this fork are documented here. This fork is based on [ervwalter/mcp-kanka](https://github.com/ervwalter/mcp-kanka).
 
+## [2.0.0a4] - 2026-07-10
+
+### Phase D: Relation CRUD
+
+Adds full CRUD for entity-to-entity relations (character `friend of` character, character `father of` character, character `rival of` character, etc.).
+
+Four new MCP tools, bringing total from 13 to 17:
+- `list_relations(entity_id)` — read all relations owned by an entity
+- `create_relations(relations: [...])` — batch create
+- `update_relations(updates: [...])` — batch update
+- `delete_relations(deletions: [...])` — batch delete
+
+### Relation shape
+
+Each relation returned to callers contains:
+- `id`, `owner_id`, `target_id` — entity IDs
+- `relation` — free-text label (`"friend"`, `"father"`, `"employer"`, etc.)
+- `attitude` — numeric score, typically -100 (hostile) to 100 (devoted)
+- `colour` — hex string for the link
+- `is_star`, `is_pinned` — display flags
+- `is_hidden` — admin-only (translated from Kanka's `visibility_id`)
+- `is_two_way` — derived: true when `mirror_id` is non-null
+- `mirror_id` — the paired mirror relation's ID (if two-way)
+
+### Two-way relations
+
+Setting `two_way: true` on create causes Kanka to also create the mirror on the target entity's side. The response includes `mirror_id` linking to the mirror.
+
+**Important gotcha (confirmed via live probe against a real campaign):** Kanka's `DELETE` on a two-way relation only removes the row on the specified owner's side. The mirror on the target survives. To fully remove both sides, `delete_relations` needs both `relation_id`s in the batch. This is documented in the tool description and `service.delete_relation` docstring.
+
+### Implementation notes
+
+- POST `/entities/{id}/relations` returns `data` as a **list** (cumulative relations on the owner side after the create, not just the new row). The service picks the max-id item to identify the just-created record.
+- PATCH intentionally never sends `two_way` — that flag only takes effect at creation time; changing it via update has no effect.
+- `is_hidden` translates to/from Kanka's `visibility_id` (1 = visible, 2 = admin-only) the same way posts do.
+
+### Tests
+
+- 20 new tests in `tests/unit/test_relations.py`: payload construction (visibility translation, two_way passthrough, empty rejection), dict normalization (is_two_way derivation, boolean coercion), service HTTP verb correctness (GET/POST/PATCH/DELETE and URL shapes), max-id selection from list response, batch aggregation (mixed validation success/failure and HTTP success/failure).
+- Full suite: 237 baseline + 20 new = 257 tests passing.
+- Live campaign round-trip: 3 scratch characters (A/B/C), one-way A→B ("Friend"), two-way A↔C ("Rival"), mirror creation confirmed on C, update on Friend (attitude 50→90 + pin), delete of the two-way A-side (confirmed the mirror on C survives).
+
 ## [2.0.0a3] - 2026-07-10
 
 ### Phase C: Attribute CRUD

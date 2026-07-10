@@ -22,15 +22,19 @@ from .tools import (
     handle_create_attributes,
     handle_create_entities,
     handle_create_posts,
+    handle_create_relations,
     handle_delete_attributes,
     handle_delete_entities,
     handle_delete_posts,
+    handle_delete_relations,
     handle_find_entities,
     handle_get_entities,
     handle_list_attributes,
+    handle_list_relations,
     handle_update_attributes,
     handle_update_entities,
     handle_update_posts,
+    handle_update_relations,
 )
 from .types import VALID_ATTRIBUTE_TYPES, VALID_ENTITY_TYPES
 
@@ -518,6 +522,151 @@ async def list_tools() -> list[types.Tool]:
                 "required": ["deletions"],
             },
         ),
+        types.Tool(
+            name="list_relations",
+            description=(
+                "List all relations owned by an entity. Relations link entity "
+                "to entity: 'friend', 'father', 'rival', 'employer', etc. Kanka "
+                "supports two-way relations (mirrored on the target). Each "
+                "returned relation has: id, owner_id, target_id, relation (label), "
+                "attitude (-100..100), colour, is_star, is_pinned, is_hidden, "
+                "is_two_way (derived), and mirror_id."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "entity_id": {
+                        "type": "integer",
+                        "description": "The owner entity_id whose relations to list",
+                    },
+                },
+                "required": ["entity_id"],
+            },
+        ),
+        types.Tool(
+            name="create_relations",
+            description=(
+                "Create one or more entity-to-entity relations. Setting "
+                "two_way=true creates a mirror on the target side."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "relations": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "owner_id": {
+                                    "type": "integer",
+                                    "description": "Source entity_id",
+                                },
+                                "target_id": {
+                                    "type": "integer",
+                                    "description": "Destination entity_id",
+                                },
+                                "relation": {
+                                    "type": "string",
+                                    "description": (
+                                        "Free-text label, e.g. 'friend', "
+                                        "'father', 'rival'"
+                                    ),
+                                },
+                                "attitude": {
+                                    "type": "integer",
+                                    "description": (
+                                        "Numeric attitude score, typically "
+                                        "-100 (hostile) to 100 (devoted)"
+                                    ),
+                                },
+                                "colour": {
+                                    "type": "string",
+                                    "description": (
+                                        "Hex colour string for the relation link"
+                                    ),
+                                },
+                                "is_star": {"type": "boolean"},
+                                "is_pinned": {"type": "boolean"},
+                                "is_hidden": {
+                                    "type": "boolean",
+                                    "description": "Admin-only visibility",
+                                },
+                                "two_way": {
+                                    "type": "boolean",
+                                    "description": (
+                                        "Also create the mirror relation on "
+                                        "the target's side"
+                                    ),
+                                },
+                            },
+                            "required": ["owner_id", "target_id", "relation"],
+                        },
+                    },
+                },
+                "required": ["relations"],
+            },
+        ),
+        types.Tool(
+            name="update_relations",
+            description="Update existing relations",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "updates": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "entity_id": {
+                                    "type": "integer",
+                                    "description": "Owner entity_id (URL path)",
+                                },
+                                "relation_id": {
+                                    "type": "integer",
+                                    "description": "The relation ID to update",
+                                },
+                                "owner_id": {"type": "integer"},
+                                "target_id": {"type": "integer"},
+                                "relation": {"type": "string"},
+                                "attitude": {"type": "integer"},
+                                "colour": {"type": "string"},
+                                "is_star": {"type": "boolean"},
+                                "is_pinned": {"type": "boolean"},
+                                "is_hidden": {"type": "boolean"},
+                            },
+                            "required": ["entity_id", "relation_id"],
+                        },
+                    },
+                },
+                "required": ["updates"],
+            },
+        ),
+        types.Tool(
+            name="delete_relations",
+            description=(
+                "Delete relations. Note: Kanka only removes the specified row; "
+                "the mirror on the target side of a two-way relation is NOT "
+                "auto-deleted. To fully remove both sides, delete both "
+                "relation_ids."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "deletions": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "entity_id": {"type": "integer"},
+                                "relation_id": {"type": "integer"},
+                            },
+                            "required": ["entity_id", "relation_id"],
+                        },
+                    },
+                },
+                "required": ["deletions"],
+            },
+        ),
     ]
 
 
@@ -554,6 +703,14 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
             result = await handle_update_attributes(**arguments)
         elif name == "delete_attributes":
             result = await handle_delete_attributes(**arguments)
+        elif name == "list_relations":
+            result = await handle_list_relations(**arguments)
+        elif name == "create_relations":
+            result = await handle_create_relations(**arguments)
+        elif name == "update_relations":
+            result = await handle_update_relations(**arguments)
+        elif name == "delete_relations":
+            result = await handle_delete_relations(**arguments)
         else:
             raise ValueError(f"Unknown tool: {name}")
 

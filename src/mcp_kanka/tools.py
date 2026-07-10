@@ -9,14 +9,18 @@ from .types import (
     CreateAttributeResult,
     CreateEntityResult,
     CreatePostResult,
+    CreateRelationResult,
     DeleteAttributeResult,
     DeleteEntityResult,
     DeletePostResult,
+    DeleteRelationResult,
     GetEntityResult,
     ListAttributesResult,
+    ListRelationsResult,
     UpdateAttributeResult,
     UpdateEntityResult,
     UpdatePostResult,
+    UpdateRelationResult,
 )
 
 logger = logging.getLogger(__name__)
@@ -227,3 +231,38 @@ async def handle_delete_attributes(**params: Any) -> list[DeleteAttributeResult]
     deletions = params.get("deletions", [])
     operations = get_operations()
     return await operations.delete_attributes(deletions)
+
+
+# =============================================================================
+# Relations (Phase D)
+# =============================================================================
+
+
+async def handle_list_relations(**params: Any) -> ListRelationsResult:
+    """List all relations owned by an entity."""
+    entity_id = params.get("entity_id")
+    if not entity_id:
+        raise ValueError("entity_id parameter is required")
+    operations = get_operations()
+    return await operations.list_relations(entity_id)
+
+
+async def handle_create_relations(**params: Any) -> list[CreateRelationResult]:
+    """Create one or more relations between entities."""
+    relations = params.get("relations", [])
+    operations = get_operations()
+    return await operations.create_relations(relations)
+
+
+async def handle_update_relations(**params: Any) -> list[UpdateRelationResult]:
+    """Update existing relations."""
+    updates = params.get("updates", [])
+    operations = get_operations()
+    return await operations.update_relations(updates)
+
+
+async def handle_delete_relations(**params: Any) -> list[DeleteRelationResult]:
+    """Delete relations from entities."""
+    deletions = params.get("deletions", [])
+    operations = get_operations()
+    return await operations.delete_relations(deletions)

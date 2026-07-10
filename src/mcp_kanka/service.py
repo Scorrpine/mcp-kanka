@@ -34,6 +34,7 @@ from .types import (
     AttributeData,
     AttributeType,
     EntityType,
+    RelationData,
 )
 
 logger = logging.getLogger(__name__)
@@ -1289,6 +1290,211 @@ class KankaService:
             "default_order": raw.get("default_order", 0),
             "api_key": raw.get("api_key"),
             "parsed": raw.get("parsed"),
+            "created_at": raw.get("created_at"),
+            "updated_at": raw.get("updated_at"),
+        }
+
+    # =========================================================================
+    # Relations (Phase D)
+    # =========================================================================
+
+    def list_relations(self, entity_id: int) -> list[RelationData]:
+        """List all relations owned by an entity.
+
+        Args:
+            entity_id: The owner entity_id.
+
+        Returns:
+            List of normalized relation dicts.
+        """
+        try:
+            resp = self.client._request(
+                "GET", f"entities/{entity_id}/relations"
+            )
+            return [self._relation_to_dict(r) for r in resp.get("data", [])]
+        except Exception as e:
+            logger.error(f"list_relations failed for entity {entity_id}: {e}")
+            raise
+
+    def create_relation(
+        self,
+        owner_id: int,
+        target_id: int,
+        relation: str,
+        attitude: int | None = None,
+        colour: str | None = None,
+        is_star: bool | None = None,
+        is_pinned: bool | None = None,
+        is_hidden: bool | None = None,
+        two_way: bool | None = None,
+    ) -> RelationData:
+        """Create a relation from ``owner_id`` to ``target_id``.
+
+        When ``two_way`` is true, Kanka also creates a mirror on the target
+        entity's side and cross-links via ``mirror_id``.
+
+        Returns:
+            The newly-created (owner-side) relation, normalized. If two_way
+            was true, ``mirror_id`` on the result points at the mirror.
+        """
+        payload = self._relation_payload(
+            owner_id=owner_id,
+            target_id=target_id,
+            relation=relation,
+            attitude=attitude,
+            colour=colour,
+            is_star=is_star,
+            is_pinned=is_pinned,
+            is_hidden=is_hidden,
+            two_way=two_way,
+        )
+        # ``owner_id``, ``target_id``, and ``relation`` are all required.
+        payload["owner_id"] = owner_id
+        payload["target_id"] = target_id
+        payload["relation"] = relation
+        try:
+            resp = self.client._request(
+                "POST", f"entities/{owner_id}/relations", json=payload
+            )
+            # Kanka's POST /relations returns ``data`` as a list. Pick the
+            # highest-id item (auto-increment; the just-created row is the
+            # newest even when pre-existing relations show up in the list).
+            data = resp.get("data") or []
+            if not isinstance(data, list) or not data:
+                raise ValueError("Unexpected empty response from create_relation")
+            newest = max(data, key=lambda d: d.get("id") or 0)
+            return self._relation_to_dict(newest)
+        except Exception as e:
+            logger.error(
+                f"create_relation failed ({owner_id} -> {target_id}): {e}"
+            )
+            raise
+
+    def update_relation(
+        self,
+        entity_id: int,
+        relation_id: int,
+        owner_id: int | None = None,
+        target_id: int | None = None,
+        relation: str | None = None,
+        attitude: int | None = None,
+        colour: str | None = None,
+        is_star: bool | None = None,
+        is_pinned: bool | None = None,
+        is_hidden: bool | None = None,
+    ) -> RelationData:
+        """Update an existing relation.
+
+        Args:
+            entity_id: The owner entity_id (used to build the URL path).
+            relation_id: The relation ID (not entity_id) to update.
+        """
+        payload = self._relation_payload(
+            owner_id=owner_id,
+            target_id=target_id,
+            relation=relation,
+            attitude=attitude,
+            colour=colour,
+            is_star=is_star,
+            is_pinned=is_pinned,
+            is_hidden=is_hidden,
+            two_way=None,  # two_way flips at creation; not editable via PATCH.
+        )
+        if not payload:
+            raise ValueError(
+                "update_relation needs at least one field to update"
+            )
+        try:
+            resp = self.client._request(
+                "PATCH",
+                f"entities/{entity_id}/relations/{relation_id}",
+                json=payload,
+            )
+            data = resp.get("data") or {}
+            return self._relation_to_dict(data)
+        except Exception as e:
+            logger.error(
+                f"update_relation failed (entity={entity_id}, rel={relation_id}): {e}"
+            )
+            raise
+
+    def delete_relation(self, entity_id: int, relation_id: int) -> bool:
+        """Delete a relation.
+
+        Note: Kanka's DELETE on a two-way relation only removes the row on the
+        specified owner's side. The mirror row on the target entity survives.
+        If you want both sides gone, delete both relation IDs explicitly.
+        Confirmed via live probe against campaign 396026 on 2026-07-10.
+        """
+        try:
+            self.client._request(
+                "DELETE", f"entities/{entity_id}/relations/{relation_id}"
+            )
+            return True
+        except Exception as e:
+            logger.error(
+                f"delete_relation failed (entity={entity_id}, rel={relation_id}): {e}"
+            )
+            raise
+
+    @staticmethod
+    def _relation_payload(
+        owner_id: int | None,
+        target_id: int | None,
+        relation: str | None,
+        attitude: int | None,
+        colour: str | None,
+        is_star: bool | None,
+        is_pinned: bool | None,
+        is_hidden: bool | None,
+        two_way: bool | None,
+    ) -> dict[str, Any]:
+        """Build a POST/PATCH payload for a relation, omitting None fields.
+
+        Translates our ``is_hidden`` bool into Kanka's ``visibility_id`` (1
+        for visible, 2 for admin-only).
+        """
+        payload: dict[str, Any] = {}
+        if owner_id is not None:
+            payload["owner_id"] = owner_id
+        if target_id is not None:
+            payload["target_id"] = target_id
+        if relation is not None:
+            payload["relation"] = relation
+        if attitude is not None:
+            payload["attitude"] = attitude
+        if colour is not None:
+            payload["colour"] = colour
+        if is_star is not None:
+            payload["is_star"] = is_star
+        if is_pinned is not None:
+            payload["is_pinned"] = is_pinned
+        if is_hidden is not None:
+            payload["visibility_id"] = 2 if is_hidden else 1
+        if two_way is not None:
+            payload["two_way"] = two_way
+        return payload
+
+    @staticmethod
+    def _relation_to_dict(raw: dict[str, Any]) -> RelationData:
+        """Normalize a raw Kanka relation dict.
+
+        Translates ``visibility_id`` back to ``is_hidden`` and derives
+        ``is_two_way`` from ``mirror_id``.
+        """
+        visibility_id = raw.get("visibility_id")
+        return {
+            "id": raw.get("id"),
+            "owner_id": raw.get("owner_id"),
+            "target_id": raw.get("target_id"),
+            "relation": raw.get("relation", ""),
+            "attitude": raw.get("attitude"),
+            "colour": raw.get("colour", "") or "",
+            "is_star": bool(raw.get("is_star", False)),
+            "is_pinned": bool(raw.get("is_pinned", False)),
+            "is_hidden": visibility_id == 2,
+            "is_two_way": raw.get("mirror_id") is not None,
+            "mirror_id": raw.get("mirror_id"),
             "created_at": raw.get("created_at"),
             "updated_at": raw.get("updated_at"),
         }

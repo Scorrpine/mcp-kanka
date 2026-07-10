@@ -16,15 +16,19 @@ from .types import (
     CreateAttributeResult,
     CreateEntityResult,
     CreatePostResult,
+    CreateRelationResult,
     DeleteAttributeResult,
     DeleteEntityResult,
     DeletePostResult,
+    DeleteRelationResult,
     EntityType,
     GetEntityResult,
     ListAttributesResult,
+    ListRelationsResult,
     UpdateAttributeResult,
     UpdateEntityResult,
     UpdatePostResult,
+    UpdateRelationResult,
 )
 from .utils import (
     filter_entities_by_name,
@@ -917,6 +921,195 @@ class KankaOperations:
                     {
                         "entity_id": entity_id,
                         "attribute_id": attribute_id,
+                        "success": False,
+                        "error": str(e),
+                    }
+                )
+        return results
+
+    # =========================================================================
+    # Relations (Phase D)
+    # =========================================================================
+
+    async def list_relations(self, entity_id: int) -> ListRelationsResult:
+        """List all relations owned by an entity."""
+        try:
+            rels = self.service.list_relations(entity_id)
+            return {
+                "entity_id": entity_id,
+                "relations": rels,
+                "success": True,
+                "error": None,
+            }
+        except Exception as e:
+            logger.error(f"list_relations failed for entity {entity_id}: {e}")
+            return {
+                "entity_id": entity_id,
+                "relations": [],
+                "success": False,
+                "error": str(e),
+            }
+
+    async def create_relations(
+        self, relations: list[dict[str, Any]]
+    ) -> list[CreateRelationResult]:
+        """Batch-create relations.
+
+        Each input dict must have ``owner_id``, ``target_id``, and
+        ``relation``. Other fields (``attitude``, ``is_star``, ``is_pinned``,
+        ``is_hidden``, ``colour``, ``two_way``) are optional.
+        """
+        results: list[CreateRelationResult] = []
+        for item in relations:
+            owner_id = item.get("owner_id")
+            target_id = item.get("target_id")
+            relation = item.get("relation")
+            if not owner_id or not target_id or not relation:
+                results.append(
+                    {
+                        "owner_id": owner_id or 0,
+                        "target_id": target_id or 0,
+                        "relation_id": None,
+                        "mirror_id": None,
+                        "success": False,
+                        "error": (
+                            "owner_id, target_id, and relation are required"
+                        ),
+                    }
+                )
+                continue
+            try:
+                created = self.service.create_relation(
+                    owner_id=owner_id,
+                    target_id=target_id,
+                    relation=relation,
+                    attitude=item.get("attitude"),
+                    colour=item.get("colour"),
+                    is_star=item.get("is_star"),
+                    is_pinned=item.get("is_pinned"),
+                    is_hidden=item.get("is_hidden"),
+                    two_way=item.get("two_way"),
+                )
+                results.append(
+                    {
+                        "owner_id": owner_id,
+                        "target_id": target_id,
+                        "relation_id": created.get("id"),
+                        "mirror_id": created.get("mirror_id"),
+                        "success": True,
+                        "error": None,
+                    }
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to create relation {owner_id} -> {target_id}: {e}"
+                )
+                results.append(
+                    {
+                        "owner_id": owner_id,
+                        "target_id": target_id,
+                        "relation_id": None,
+                        "mirror_id": None,
+                        "success": False,
+                        "error": str(e),
+                    }
+                )
+        return results
+
+    async def update_relations(
+        self, updates: list[dict[str, Any]]
+    ) -> list[UpdateRelationResult]:
+        """Batch-update relations.
+
+        Each input must have ``entity_id`` (the owner) and ``relation_id``.
+        """
+        results: list[UpdateRelationResult] = []
+        for item in updates:
+            entity_id = item.get("entity_id")
+            relation_id = item.get("relation_id")
+            if not entity_id or not relation_id:
+                results.append(
+                    {
+                        "entity_id": entity_id or 0,
+                        "relation_id": relation_id or 0,
+                        "success": False,
+                        "error": "entity_id and relation_id are required",
+                    }
+                )
+                continue
+            try:
+                self.service.update_relation(
+                    entity_id=entity_id,
+                    relation_id=relation_id,
+                    owner_id=item.get("owner_id"),
+                    target_id=item.get("target_id"),
+                    relation=item.get("relation"),
+                    attitude=item.get("attitude"),
+                    colour=item.get("colour"),
+                    is_star=item.get("is_star"),
+                    is_pinned=item.get("is_pinned"),
+                    is_hidden=item.get("is_hidden"),
+                )
+                results.append(
+                    {
+                        "entity_id": entity_id,
+                        "relation_id": relation_id,
+                        "success": True,
+                        "error": None,
+                    }
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to update relation {relation_id} on entity "
+                    f"{entity_id}: {e}"
+                )
+                results.append(
+                    {
+                        "entity_id": entity_id,
+                        "relation_id": relation_id,
+                        "success": False,
+                        "error": str(e),
+                    }
+                )
+        return results
+
+    async def delete_relations(
+        self, deletions: list[dict[str, Any]]
+    ) -> list[DeleteRelationResult]:
+        """Batch-delete relations. Two-way relations remove both sides."""
+        results: list[DeleteRelationResult] = []
+        for item in deletions:
+            entity_id = item.get("entity_id")
+            relation_id = item.get("relation_id")
+            if not entity_id or not relation_id:
+                results.append(
+                    {
+                        "entity_id": entity_id or 0,
+                        "relation_id": relation_id or 0,
+                        "success": False,
+                        "error": "entity_id and relation_id are required",
+                    }
+                )
+                continue
+            try:
+                self.service.delete_relation(entity_id, relation_id)
+                results.append(
+                    {
+                        "entity_id": entity_id,
+                        "relation_id": relation_id,
+                        "success": True,
+                        "error": None,
+                    }
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to delete relation {relation_id} from entity "
+                    f"{entity_id}: {e}"
+                )
+                results.append(
+                    {
+                        "entity_id": entity_id,
+                        "relation_id": relation_id,
                         "success": False,
                         "error": str(e),
                     }
