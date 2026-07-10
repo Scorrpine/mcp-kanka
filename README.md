@@ -1,8 +1,12 @@
-# MCP-Kanka
+# MCP-Kanka (Scorrpine fork)
+
+> Fork of [ervwalter/mcp-kanka](https://github.com/ervwalter/mcp-kanka) that expands coverage of the Kanka API beyond the baseline entity CRUD and posts. See [CHANGELOG.md](CHANGELOG.md) for what's added.
+>
+> Distribution name: `mcp-kanka-scorrpine`. Import name: `mcp_kanka` (unchanged). Claude MCP config paths do not need updates when swapping in this fork.
 
 MCP (Model Context Protocol) server for Kanka API integration. This server provides AI assistants with tools to interact with Kanka campaigns, enabling CRUD operations on various entity types like characters, locations, organizations, and more.
 
-This package is designed specifically to serve the needs of [Teghrim](https://github.com/ervwalter/teghrim) but may be useful to others working with Kanka and MCP.
+The upstream package is designed specifically to serve the needs of [Teghrim](https://github.com/ervwalter/teghrim). This fork targets broader Kanka API coverage.
 
 ## Features
 
@@ -18,12 +22,17 @@ This package is designed specifically to serve the needs of [Teghrim](https://gi
 
 ## Requirements
 
-- Python 3.10 or higher (3.13.5 recommended)
+- Python 3.14 or higher
 - Kanka API token and campaign ID
 
 ## Installation
 
-### From PyPI
+### From git (recommended for this fork)
+```bash
+pip install git+https://github.com/Scorrpine/mcp-kanka.git
+```
+
+### From upstream PyPI (does not include this fork's additions)
 ```bash
 pip install mcp-kanka
 ```
