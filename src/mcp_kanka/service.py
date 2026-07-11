@@ -34,12 +34,15 @@ from .types import (
     AttributeData,
     AttributeType,
     CalendarWeatherData,
+    CampaignData,
+    CampaignUserData,
     EntityAbilityData,
     EntityType,
     InventoryData,
     OrganisationMemberData,
     QuestElementData,
     RelationData,
+    RoleData,
     TimelineElementData,
     TimelineEraData,
 )
@@ -2608,6 +2611,89 @@ class KankaService:
                 f"element={element_id}): {e}"
             )
             raise
+
+    # =========================================================================
+    # Meta: campaign, roles, users (Phase I)
+    # =========================================================================
+
+    def get_campaign(self) -> CampaignData:
+        """Fetch the campaign's metadata.
+
+        The Kanka API roots this at ``campaigns/{campaign_id}``. The
+        ``_request`` helper is scoped to that root, so we call ``GET ""``.
+        """
+        try:
+            resp = self.client._request("GET", "")
+            return self._campaign_to_dict(resp.get("data") or {})
+        except Exception as e:
+            logger.error(f"get_campaign failed: {e}")
+            raise
+
+    def list_roles(self) -> list[RoleData]:
+        """List roles configured on this campaign."""
+        try:
+            resp = self.client._request("GET", "roles")
+            return [self._role_to_dict(r) for r in resp.get("data", [])]
+        except Exception as e:
+            logger.error(f"list_roles failed: {e}")
+            raise
+
+    def list_campaign_users(self) -> list[CampaignUserData]:
+        """List users (players + GMs) with access to this campaign."""
+        try:
+            resp = self.client._request("GET", "users")
+            return [self._campaign_user_to_dict(u) for u in resp.get("data", [])]
+        except Exception as e:
+            logger.error(f"list_campaign_users failed: {e}")
+            raise
+
+    def _campaign_to_dict(self, raw: dict[str, Any]) -> CampaignData:
+        visibility_id = raw.get("visibility_id")
+        raw_desc = raw.get("description_raw") or raw.get("entry")
+        return {
+            "id": raw.get("id"),
+            "name": raw.get("name", ""),
+            "slug": raw.get("slug", ""),
+            "locale": raw.get("locale"),
+            "description": (
+                self.converter.html_to_markdown(raw_desc) if raw_desc else None
+            ),
+            "image": raw.get("image"),
+            "image_full": raw.get("image_full"),
+            "image_thumb": raw.get("image_thumb"),
+            "visibility": raw.get("visibility"),
+            "visibility_id": visibility_id,
+            "is_hidden": visibility_id == 2,
+            "settings": raw.get("settings") or {},
+            "ui_settings": raw.get("ui_settings") or {},
+            "created_at": raw.get("created_at"),
+            "updated_at": raw.get("updated_at"),
+        }
+
+    @staticmethod
+    def _role_to_dict(raw: dict[str, Any]) -> RoleData:
+        return {
+            "id": raw.get("id"),
+            "name": raw.get("name", ""),
+            "is_admin": bool(raw.get("is_admin", False)),
+        }
+
+    def _campaign_user_to_dict(self, raw: dict[str, Any]) -> CampaignUserData:
+        # ``role`` is a list of role dicts on the users endpoint. Normalize
+        # both a single dict and a list into ``roles: [...]``.
+        role_field = raw.get("role")
+        if isinstance(role_field, list):
+            roles = [self._role_to_dict(r) for r in role_field]
+        elif isinstance(role_field, dict):
+            roles = [self._role_to_dict(role_field)]
+        else:
+            roles = []
+        return {
+            "id": raw.get("id"),
+            "name": raw.get("name", ""),
+            "avatar": raw.get("avatar"),
+            "roles": roles,
+        }
 
     def _timeline_element_to_dict(
         self, raw: dict[str, Any]

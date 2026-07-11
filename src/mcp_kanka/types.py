@@ -1350,3 +1350,59 @@ class DeleteTimelineElementResult(TypedDict):
     element_id: int
     success: bool
     error: str | None
+
+
+# =============================================================================
+# Phase I: Meta (campaign / roles / users)
+# =============================================================================
+
+
+class CampaignData(TypedDict, total=False):
+    """Campaign metadata."""
+
+    id: int
+    name: str
+    slug: str
+    locale: str | None
+    description: str | None  # From ``description_raw`` on the API response.
+    image: str | None
+    image_full: str | None
+    image_thumb: str | None
+    visibility: str | None
+    visibility_id: int | None
+    is_hidden: bool
+    settings: dict[str, Any]
+    ui_settings: dict[str, Any]
+    created_at: str | None
+    updated_at: str | None
+
+
+class GetCampaignResult(TypedDict):
+    campaign: CampaignData
+    success: bool
+    error: str | None
+
+
+class RoleData(TypedDict, total=False):
+    id: int
+    name: str
+    is_admin: bool
+
+
+class ListRolesResult(TypedDict):
+    roles: list[RoleData]
+    success: bool
+    error: str | None
+
+
+class CampaignUserData(TypedDict, total=False):
+    id: int
+    name: str
+    avatar: str | None
+    roles: list[RoleData]
+
+
+class ListCampaignUsersResult(TypedDict):
+    users: list[CampaignUserData]
+    success: bool
+    error: str | None

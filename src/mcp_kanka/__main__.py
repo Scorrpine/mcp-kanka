@@ -42,7 +42,10 @@ from .tools import (
     handle_delete_timeline_elements,
     handle_delete_timeline_eras,
     handle_find_entities,
+    handle_get_campaign,
     handle_get_entities,
+    handle_list_campaign_users,
+    handle_list_roles,
     handle_list_attributes,
     handle_list_calendar_weather,
     handle_list_entity_abilities,
@@ -1461,6 +1464,34 @@ async def list_tools() -> list[types.Tool]:
                 "required": ["deletions"],
             },
         ),
+        # =============================================================
+        # Phase I: meta (read-only)
+        # =============================================================
+        types.Tool(
+            name="get_campaign",
+            description=(
+                "Fetch the campaign's metadata: name, description, slug, "
+                "visibility, image URLs, and settings. Useful for confirming "
+                "which campaign the MCP is connected to."
+            ),
+            inputSchema={"type": "object", "properties": {}},
+        ),
+        types.Tool(
+            name="list_roles",
+            description=(
+                "List roles configured on the campaign (Admin, Player, "
+                "Guest, custom roles). Each role has id, name, and is_admin."
+            ),
+            inputSchema={"type": "object", "properties": {}},
+        ),
+        types.Tool(
+            name="list_campaign_users",
+            description=(
+                "List users (players + GMs) with access to this campaign, "
+                "including their assigned roles."
+            ),
+            inputSchema={"type": "object", "properties": {}},
+        ),
     ]
 
 
@@ -1563,6 +1594,13 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
             result = await handle_update_timeline_elements(**arguments)
         elif name == "delete_timeline_elements":
             result = await handle_delete_timeline_elements(**arguments)
+        # Phase I: meta
+        elif name == "get_campaign":
+            result = await handle_get_campaign(**arguments)
+        elif name == "list_roles":
+            result = await handle_list_roles(**arguments)
+        elif name == "list_campaign_users":
+            result = await handle_list_campaign_users(**arguments)
         else:
             raise ValueError(f"Unknown tool: {name}")
 

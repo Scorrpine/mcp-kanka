@@ -15,6 +15,9 @@ from .types import (
     CheckEntityUpdatesResult,
     CreateAttributeResult,
     CreateCalendarWeatherResult,
+    GetCampaignResult,
+    ListCampaignUsersResult,
+    ListRolesResult,
     CreateEntityAbilityResult,
     CreateEntityResult,
     CreateInventoryResult,
@@ -2275,6 +2278,35 @@ class KankaOperations:
                     }
                 )
         return results
+
+    # =========================================================================
+    # Phase I: meta (campaign, roles, users)
+    # =========================================================================
+
+    async def get_campaign(self) -> GetCampaignResult:
+        try:
+            data = self.service.get_campaign()
+            return {"campaign": data, "success": True, "error": None}
+        except Exception as e:
+            return {
+                "campaign": {},
+                "success": False,
+                "error": str(e),
+            }
+
+    async def list_roles(self) -> ListRolesResult:
+        try:
+            data = self.service.list_roles()
+            return {"roles": data, "success": True, "error": None}
+        except Exception as e:
+            return {"roles": [], "success": False, "error": str(e)}
+
+    async def list_campaign_users(self) -> ListCampaignUsersResult:
+        try:
+            data = self.service.list_campaign_users()
+            return {"users": data, "success": True, "error": None}
+        except Exception as e:
+            return {"users": [], "success": False, "error": str(e)}
 
     async def delete_timeline_elements(
         self, deletions: list[dict[str, Any]]

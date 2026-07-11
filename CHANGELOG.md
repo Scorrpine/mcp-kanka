@@ -2,6 +2,34 @@
 
 All notable changes to this fork are documented here. This fork is based on [ervwalter/mcp-kanka](https://github.com/ervwalter/mcp-kanka).
 
+## [2.0.0a7] - 2026-07-11
+
+### Phase I: Meta endpoints (campaign, roles, users)
+
+Adds three read-only meta tools. Tool count grows from 45 to 48.
+
+- `get_campaign` — returns campaign metadata: name, slug, locale, description (HTML → Markdown), image URLs, visibility, is_hidden, settings, ui_settings, timestamps.
+- `list_roles` — lists the roles configured on the campaign (Admin, Player, Guest, and any custom roles). Each row has `id`, `name`, `is_admin`.
+- `list_campaign_users` — lists users with campaign access, including their assigned role(s). Kanka returns `role` as either a single dict or a list depending on how the API is called; the fork normalizes both into `roles: [RoleData]`.
+
+### Endpoints that turned out NOT to work in this API tier
+
+The live probe against campaign 396026 confirmed 404s on:
+
+- `permissions` — no top-level endpoint. Kanka may expose per-entity permissions elsewhere (via UI only).
+- `members`, `campaign_members`, `campaign_users`, `campaign/users` — none exist; the correct list is `users`.
+- `gallery`, `gallery/folders`, `default_images` — no direct read endpoint; only `images` exists, and it appears mutation requires a multipart file upload (out of scope for stdio MCP).
+- `bulk` — not exposed at this tier (likely a paid-plan mass-action endpoint).
+- `roles/{id}` — 404s. Role details only come via the list endpoint; there's no per-role detail read/write via the API.
+
+None of these will surface as MCP tools. Skipping them isn't a functional loss for the fork's primary use cases (worldbuilding + session prep). If you need to manage permissions/team-members, use the Kanka UI.
+
+### Tests
+
+- 13 new tests in `tests/unit/test_meta.py`: HTTP endpoint correctness (`GET ""` for campaign, `GET "roles"` and `GET "users"`), description Markdown conversion, visibility → is_hidden translation, role dict-vs-list normalization on users, and error-catching wrappers at the operations layer.
+- Full suite: 311 baseline + 13 new = 324 tests passing.
+- Live campaign confirmation: campaign identifies as "Ethringdal" (slug `ethringdal`), 4 roles present, 1 user (scorrpine, Admin).
+
 ## [2.0.0a6] - 2026-07-11
 
 ### Phase F: Calendar and timeline sub-resources

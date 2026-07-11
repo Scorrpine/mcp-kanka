@@ -8,6 +8,9 @@ from .types import (
     CheckEntityUpdatesResult,
     CreateAttributeResult,
     CreateCalendarWeatherResult,
+    GetCampaignResult,
+    ListCampaignUsersResult,
+    ListRolesResult,
     CreateEntityAbilityResult,
     CreateEntityResult,
     CreateInventoryResult,
@@ -530,3 +533,20 @@ async def handle_delete_timeline_elements(
     return await get_operations().delete_timeline_elements(
         params.get("deletions", [])
     )
+
+
+# =============================================================================
+# Phase I: meta
+# =============================================================================
+
+
+async def handle_get_campaign(**params: Any) -> GetCampaignResult:
+    return await get_operations().get_campaign()
+
+
+async def handle_list_roles(**params: Any) -> ListRolesResult:
+    return await get_operations().list_roles()
+
+
+async def handle_list_campaign_users(**params: Any) -> ListCampaignUsersResult:
+    return await get_operations().list_campaign_users()
