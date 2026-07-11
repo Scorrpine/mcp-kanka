@@ -14,6 +14,7 @@ from .types import (
     VALID_ENTITY_TYPES,
     CheckEntityUpdatesResult,
     CreateAttributeResult,
+    CreateCalendarWeatherResult,
     CreateEntityAbilityResult,
     CreateEntityResult,
     CreateInventoryResult,
@@ -21,7 +22,10 @@ from .types import (
     CreatePostResult,
     CreateQuestElementResult,
     CreateRelationResult,
+    CreateTimelineElementResult,
+    CreateTimelineEraResult,
     DeleteAttributeResult,
+    DeleteCalendarWeatherResult,
     DeleteEntityAbilityResult,
     DeleteEntityResult,
     DeleteInventoryResult,
@@ -29,15 +33,21 @@ from .types import (
     DeletePostResult,
     DeleteQuestElementResult,
     DeleteRelationResult,
+    DeleteTimelineElementResult,
+    DeleteTimelineEraResult,
     EntityType,
     GetEntityResult,
     ListAttributesResult,
+    ListCalendarWeatherResult,
     ListEntityAbilitiesResult,
     ListInventoryResult,
     ListOrganisationMembersResult,
     ListQuestElementsResult,
     ListRelationsResult,
+    ListTimelineElementsResult,
+    ListTimelineErasResult,
     UpdateAttributeResult,
+    UpdateCalendarWeatherResult,
     UpdateEntityAbilityResult,
     UpdateEntityResult,
     UpdateInventoryResult,
@@ -45,6 +55,8 @@ from .types import (
     UpdatePostResult,
     UpdateQuestElementResult,
     UpdateRelationResult,
+    UpdateTimelineElementResult,
+    UpdateTimelineEraResult,
 )
 from .utils import (
     filter_entities_by_name,
@@ -438,6 +450,7 @@ class KankaOperations:
                     header_uuid=update.get("header_uuid"),
                     title=update.get("title"),
                     race_ids=update.get("race_ids"),
+                    date=update.get("date"),
                 )
 
                 result: UpdateEntityResult = {
@@ -1796,6 +1809,504 @@ class KankaOperations:
                 results.append(
                     {
                         "quest_id": quest_id,
+                        "element_id": element_id,
+                        "success": False,
+                        "error": str(e),
+                    }
+                )
+        return results
+
+    # =========================================================================
+    # Calendar weather (Phase F)
+    # =========================================================================
+
+    async def list_calendar_weather(
+        self, calendar_id: int
+    ) -> ListCalendarWeatherResult:
+        try:
+            rows = self.service.list_calendar_weather(calendar_id)
+            return {
+                "calendar_id": calendar_id,
+                "weather": rows,
+                "success": True,
+                "error": None,
+            }
+        except Exception as e:
+            return {
+                "calendar_id": calendar_id,
+                "weather": [],
+                "success": False,
+                "error": str(e),
+            }
+
+    async def create_calendar_weather(
+        self, items: list[dict[str, Any]]
+    ) -> list[CreateCalendarWeatherResult]:
+        results: list[CreateCalendarWeatherResult] = []
+        for item in items:
+            cal_id = item.get("calendar_id")
+            day = item.get("day")
+            month = item.get("month")
+            year = item.get("year")
+            if not cal_id or day is None or month is None or year is None:
+                results.append(
+                    {
+                        "calendar_id": cal_id or 0,
+                        "weather_id": None,
+                        "success": False,
+                        "error": (
+                            "calendar_id, day, month, year are required"
+                        ),
+                    }
+                )
+                continue
+            try:
+                created = self.service.create_calendar_weather(
+                    calendar_id=cal_id,
+                    day=day,
+                    month=month,
+                    year=year,
+                    weather=item.get("weather"),
+                    temperature=item.get("temperature"),
+                    is_hidden=item.get("is_hidden"),
+                )
+                results.append(
+                    {
+                        "calendar_id": cal_id,
+                        "weather_id": created.get("id"),
+                        "success": True,
+                        "error": None,
+                    }
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to create weather on calendar {cal_id}: {e}"
+                )
+                results.append(
+                    {
+                        "calendar_id": cal_id,
+                        "weather_id": None,
+                        "success": False,
+                        "error": str(e),
+                    }
+                )
+        return results
+
+    async def update_calendar_weather(
+        self, updates: list[dict[str, Any]]
+    ) -> list[UpdateCalendarWeatherResult]:
+        results: list[UpdateCalendarWeatherResult] = []
+        for item in updates:
+            cal_id = item.get("calendar_id")
+            row_id = item.get("weather_id")
+            if not cal_id or not row_id:
+                results.append(
+                    {
+                        "calendar_id": cal_id or 0,
+                        "weather_id": row_id or 0,
+                        "success": False,
+                        "error": "calendar_id and weather_id are required",
+                    }
+                )
+                continue
+            try:
+                self.service.update_calendar_weather(
+                    calendar_id=cal_id,
+                    weather_id=row_id,
+                    day=item.get("day"),
+                    month=item.get("month"),
+                    year=item.get("year"),
+                    weather=item.get("weather"),
+                    temperature=item.get("temperature"),
+                    is_hidden=item.get("is_hidden"),
+                )
+                results.append(
+                    {
+                        "calendar_id": cal_id,
+                        "weather_id": row_id,
+                        "success": True,
+                        "error": None,
+                    }
+                )
+            except Exception as e:
+                results.append(
+                    {
+                        "calendar_id": cal_id,
+                        "weather_id": row_id,
+                        "success": False,
+                        "error": str(e),
+                    }
+                )
+        return results
+
+    async def delete_calendar_weather(
+        self, deletions: list[dict[str, Any]]
+    ) -> list[DeleteCalendarWeatherResult]:
+        results: list[DeleteCalendarWeatherResult] = []
+        for item in deletions:
+            cal_id = item.get("calendar_id")
+            row_id = item.get("weather_id")
+            if not cal_id or not row_id:
+                results.append(
+                    {
+                        "calendar_id": cal_id or 0,
+                        "weather_id": row_id or 0,
+                        "success": False,
+                        "error": "calendar_id and weather_id are required",
+                    }
+                )
+                continue
+            try:
+                self.service.delete_calendar_weather(cal_id, row_id)
+                results.append(
+                    {
+                        "calendar_id": cal_id,
+                        "weather_id": row_id,
+                        "success": True,
+                        "error": None,
+                    }
+                )
+            except Exception as e:
+                results.append(
+                    {
+                        "calendar_id": cal_id,
+                        "weather_id": row_id,
+                        "success": False,
+                        "error": str(e),
+                    }
+                )
+        return results
+
+    # =========================================================================
+    # Timeline eras (Phase F)
+    # =========================================================================
+
+    async def list_timeline_eras(
+        self, timeline_id: int
+    ) -> ListTimelineErasResult:
+        try:
+            rows = self.service.list_timeline_eras(timeline_id)
+            return {
+                "timeline_id": timeline_id,
+                "eras": rows,
+                "success": True,
+                "error": None,
+            }
+        except Exception as e:
+            return {
+                "timeline_id": timeline_id,
+                "eras": [],
+                "success": False,
+                "error": str(e),
+            }
+
+    async def create_timeline_eras(
+        self, items: list[dict[str, Any]]
+    ) -> list[CreateTimelineEraResult]:
+        results: list[CreateTimelineEraResult] = []
+        for item in items:
+            timeline_id = item.get("timeline_id")
+            name = item.get("name")
+            if not timeline_id or not name:
+                results.append(
+                    {
+                        "timeline_id": timeline_id or 0,
+                        "era_id": None,
+                        "success": False,
+                        "error": "timeline_id and name are required",
+                    }
+                )
+                continue
+            try:
+                created = self.service.create_timeline_era(
+                    timeline_id=timeline_id,
+                    name=name,
+                    abbreviation=item.get("abbreviation"),
+                    start_year=item.get("start_year"),
+                    end_year=item.get("end_year"),
+                    entry=item.get("entry"),
+                    position=item.get("position"),
+                    is_collapsed=item.get("is_collapsed"),
+                )
+                results.append(
+                    {
+                        "timeline_id": timeline_id,
+                        "era_id": created.get("id"),
+                        "success": True,
+                        "error": None,
+                    }
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to create era on timeline {timeline_id}: {e}"
+                )
+                results.append(
+                    {
+                        "timeline_id": timeline_id,
+                        "era_id": None,
+                        "success": False,
+                        "error": str(e),
+                    }
+                )
+        return results
+
+    async def update_timeline_eras(
+        self, updates: list[dict[str, Any]]
+    ) -> list[UpdateTimelineEraResult]:
+        results: list[UpdateTimelineEraResult] = []
+        for item in updates:
+            timeline_id = item.get("timeline_id")
+            era_id = item.get("era_id")
+            if not timeline_id or not era_id:
+                results.append(
+                    {
+                        "timeline_id": timeline_id or 0,
+                        "era_id": era_id or 0,
+                        "success": False,
+                        "error": "timeline_id and era_id are required",
+                    }
+                )
+                continue
+            try:
+                self.service.update_timeline_era(
+                    timeline_id=timeline_id,
+                    era_id=era_id,
+                    name=item.get("name"),
+                    abbreviation=item.get("abbreviation"),
+                    start_year=item.get("start_year"),
+                    end_year=item.get("end_year"),
+                    entry=item.get("entry"),
+                    position=item.get("position"),
+                    is_collapsed=item.get("is_collapsed"),
+                )
+                results.append(
+                    {
+                        "timeline_id": timeline_id,
+                        "era_id": era_id,
+                        "success": True,
+                        "error": None,
+                    }
+                )
+            except Exception as e:
+                results.append(
+                    {
+                        "timeline_id": timeline_id,
+                        "era_id": era_id,
+                        "success": False,
+                        "error": str(e),
+                    }
+                )
+        return results
+
+    async def delete_timeline_eras(
+        self, deletions: list[dict[str, Any]]
+    ) -> list[DeleteTimelineEraResult]:
+        results: list[DeleteTimelineEraResult] = []
+        for item in deletions:
+            timeline_id = item.get("timeline_id")
+            era_id = item.get("era_id")
+            if not timeline_id or not era_id:
+                results.append(
+                    {
+                        "timeline_id": timeline_id or 0,
+                        "era_id": era_id or 0,
+                        "success": False,
+                        "error": "timeline_id and era_id are required",
+                    }
+                )
+                continue
+            try:
+                self.service.delete_timeline_era(timeline_id, era_id)
+                results.append(
+                    {
+                        "timeline_id": timeline_id,
+                        "era_id": era_id,
+                        "success": True,
+                        "error": None,
+                    }
+                )
+            except Exception as e:
+                results.append(
+                    {
+                        "timeline_id": timeline_id,
+                        "era_id": era_id,
+                        "success": False,
+                        "error": str(e),
+                    }
+                )
+        return results
+
+    # =========================================================================
+    # Timeline elements (Phase F)
+    # =========================================================================
+
+    async def list_timeline_elements(
+        self, timeline_id: int
+    ) -> ListTimelineElementsResult:
+        try:
+            rows = self.service.list_timeline_elements(timeline_id)
+            return {
+                "timeline_id": timeline_id,
+                "elements": rows,
+                "success": True,
+                "error": None,
+            }
+        except Exception as e:
+            return {
+                "timeline_id": timeline_id,
+                "elements": [],
+                "success": False,
+                "error": str(e),
+            }
+
+    async def create_timeline_elements(
+        self, items: list[dict[str, Any]]
+    ) -> list[CreateTimelineElementResult]:
+        results: list[CreateTimelineElementResult] = []
+        for item in items:
+            timeline_id = item.get("timeline_id")
+            era_id = item.get("era_id")
+            if (
+                not timeline_id
+                or not era_id
+                or (item.get("entity_id") is None and not item.get("name"))
+            ):
+                results.append(
+                    {
+                        "timeline_id": timeline_id or 0,
+                        "era_id": era_id or 0,
+                        "element_id": None,
+                        "success": False,
+                        "error": (
+                            "timeline_id + era_id required; one of "
+                            "entity_id/name required"
+                        ),
+                    }
+                )
+                continue
+            try:
+                created = self.service.create_timeline_element(
+                    timeline_id=timeline_id,
+                    era_id=era_id,
+                    name=item.get("name"),
+                    entity_id=item.get("entity_id"),
+                    date=item.get("date"),
+                    entry=item.get("entry"),
+                    colour=item.get("colour"),
+                    position=item.get("position"),
+                    icon=item.get("icon"),
+                    is_collapsed=item.get("is_collapsed"),
+                    is_hidden=item.get("is_hidden"),
+                    use_entity_entry=item.get("use_entity_entry"),
+                )
+                results.append(
+                    {
+                        "timeline_id": timeline_id,
+                        "era_id": era_id,
+                        "element_id": created.get("id"),
+                        "success": True,
+                        "error": None,
+                    }
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to create timeline_element on timeline "
+                    f"{timeline_id}: {e}"
+                )
+                results.append(
+                    {
+                        "timeline_id": timeline_id,
+                        "era_id": era_id,
+                        "element_id": None,
+                        "success": False,
+                        "error": str(e),
+                    }
+                )
+        return results
+
+    async def update_timeline_elements(
+        self, updates: list[dict[str, Any]]
+    ) -> list[UpdateTimelineElementResult]:
+        results: list[UpdateTimelineElementResult] = []
+        for item in updates:
+            timeline_id = item.get("timeline_id")
+            element_id = item.get("element_id")
+            if not timeline_id or not element_id:
+                results.append(
+                    {
+                        "timeline_id": timeline_id or 0,
+                        "element_id": element_id or 0,
+                        "success": False,
+                        "error": "timeline_id and element_id are required",
+                    }
+                )
+                continue
+            try:
+                self.service.update_timeline_element(
+                    timeline_id=timeline_id,
+                    element_id=element_id,
+                    era_id=item.get("era_id"),
+                    entity_id=item.get("entity_id"),
+                    name=item.get("name"),
+                    date=item.get("date"),
+                    entry=item.get("entry"),
+                    colour=item.get("colour"),
+                    position=item.get("position"),
+                    icon=item.get("icon"),
+                    is_collapsed=item.get("is_collapsed"),
+                    is_hidden=item.get("is_hidden"),
+                    use_entity_entry=item.get("use_entity_entry"),
+                )
+                results.append(
+                    {
+                        "timeline_id": timeline_id,
+                        "element_id": element_id,
+                        "success": True,
+                        "error": None,
+                    }
+                )
+            except Exception as e:
+                results.append(
+                    {
+                        "timeline_id": timeline_id,
+                        "element_id": element_id,
+                        "success": False,
+                        "error": str(e),
+                    }
+                )
+        return results
+
+    async def delete_timeline_elements(
+        self, deletions: list[dict[str, Any]]
+    ) -> list[DeleteTimelineElementResult]:
+        results: list[DeleteTimelineElementResult] = []
+        for item in deletions:
+            timeline_id = item.get("timeline_id")
+            element_id = item.get("element_id")
+            if not timeline_id or not element_id:
+                results.append(
+                    {
+                        "timeline_id": timeline_id or 0,
+                        "element_id": element_id or 0,
+                        "success": False,
+                        "error": "timeline_id and element_id are required",
+                    }
+                )
+                continue
+            try:
+                self.service.delete_timeline_element(timeline_id, element_id)
+                results.append(
+                    {
+                        "timeline_id": timeline_id,
+                        "element_id": element_id,
+                        "success": True,
+                        "error": None,
+                    }
+                )
+            except Exception as e:
+                results.append(
+                    {
+                        "timeline_id": timeline_id,
                         "element_id": element_id,
                         "success": False,
                         "error": str(e),

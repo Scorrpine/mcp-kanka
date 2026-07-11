@@ -7,6 +7,7 @@ from .operations import get_operations
 from .types import (
     CheckEntityUpdatesResult,
     CreateAttributeResult,
+    CreateCalendarWeatherResult,
     CreateEntityAbilityResult,
     CreateEntityResult,
     CreateInventoryResult,
@@ -14,7 +15,10 @@ from .types import (
     CreatePostResult,
     CreateQuestElementResult,
     CreateRelationResult,
+    CreateTimelineElementResult,
+    CreateTimelineEraResult,
     DeleteAttributeResult,
+    DeleteCalendarWeatherResult,
     DeleteEntityAbilityResult,
     DeleteEntityResult,
     DeleteInventoryResult,
@@ -22,14 +26,20 @@ from .types import (
     DeletePostResult,
     DeleteQuestElementResult,
     DeleteRelationResult,
+    DeleteTimelineElementResult,
+    DeleteTimelineEraResult,
     GetEntityResult,
     ListAttributesResult,
+    ListCalendarWeatherResult,
     ListEntityAbilitiesResult,
     ListInventoryResult,
     ListOrganisationMembersResult,
     ListQuestElementsResult,
     ListRelationsResult,
+    ListTimelineElementsResult,
+    ListTimelineErasResult,
     UpdateAttributeResult,
+    UpdateCalendarWeatherResult,
     UpdateEntityAbilityResult,
     UpdateEntityResult,
     UpdateInventoryResult,
@@ -37,6 +47,8 @@ from .types import (
     UpdatePostResult,
     UpdateQuestElementResult,
     UpdateRelationResult,
+    UpdateTimelineElementResult,
+    UpdateTimelineEraResult,
 )
 
 logger = logging.getLogger(__name__)
@@ -410,5 +422,111 @@ async def handle_delete_quest_elements(
     **params: Any,
 ) -> list[DeleteQuestElementResult]:
     return await get_operations().delete_quest_elements(
+        params.get("deletions", [])
+    )
+
+
+# =============================================================================
+# Phase F: calendar_weather
+# =============================================================================
+
+
+async def handle_list_calendar_weather(**params: Any) -> ListCalendarWeatherResult:
+    cal_id = params.get("calendar_id")
+    if not cal_id:
+        raise ValueError("calendar_id parameter is required")
+    return await get_operations().list_calendar_weather(cal_id)
+
+
+async def handle_create_calendar_weather(
+    **params: Any,
+) -> list[CreateCalendarWeatherResult]:
+    return await get_operations().create_calendar_weather(
+        params.get("items", [])
+    )
+
+
+async def handle_update_calendar_weather(
+    **params: Any,
+) -> list[UpdateCalendarWeatherResult]:
+    return await get_operations().update_calendar_weather(
+        params.get("updates", [])
+    )
+
+
+async def handle_delete_calendar_weather(
+    **params: Any,
+) -> list[DeleteCalendarWeatherResult]:
+    return await get_operations().delete_calendar_weather(
+        params.get("deletions", [])
+    )
+
+
+# =============================================================================
+# Phase F: timeline_eras
+# =============================================================================
+
+
+async def handle_list_timeline_eras(**params: Any) -> ListTimelineErasResult:
+    tl_id = params.get("timeline_id")
+    if not tl_id:
+        raise ValueError("timeline_id parameter is required")
+    return await get_operations().list_timeline_eras(tl_id)
+
+
+async def handle_create_timeline_eras(
+    **params: Any,
+) -> list[CreateTimelineEraResult]:
+    return await get_operations().create_timeline_eras(params.get("items", []))
+
+
+async def handle_update_timeline_eras(
+    **params: Any,
+) -> list[UpdateTimelineEraResult]:
+    return await get_operations().update_timeline_eras(params.get("updates", []))
+
+
+async def handle_delete_timeline_eras(
+    **params: Any,
+) -> list[DeleteTimelineEraResult]:
+    return await get_operations().delete_timeline_eras(
+        params.get("deletions", [])
+    )
+
+
+# =============================================================================
+# Phase F: timeline_elements
+# =============================================================================
+
+
+async def handle_list_timeline_elements(
+    **params: Any,
+) -> ListTimelineElementsResult:
+    tl_id = params.get("timeline_id")
+    if not tl_id:
+        raise ValueError("timeline_id parameter is required")
+    return await get_operations().list_timeline_elements(tl_id)
+
+
+async def handle_create_timeline_elements(
+    **params: Any,
+) -> list[CreateTimelineElementResult]:
+    return await get_operations().create_timeline_elements(
+        params.get("items", [])
+    )
+
+
+async def handle_update_timeline_elements(
+    **params: Any,
+) -> list[UpdateTimelineElementResult]:
+    return await get_operations().update_timeline_elements(
+        params.get("updates", [])
+    )
+
+
+async def handle_delete_timeline_elements(
+    **params: Any,
+) -> list[DeleteTimelineElementResult]:
+    return await get_operations().delete_timeline_elements(
         params.get("deletions", [])
     )

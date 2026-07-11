@@ -1065,3 +1065,288 @@ class DeleteQuestElementResult(TypedDict):
     element_id: int
     success: bool
     error: str | None
+
+
+# =============================================================================
+# Phase F: calendar_weather (weather entries on calendar days)
+# =============================================================================
+#
+# Endpoint: /calendars/{calendar_type_id}/calendar_weather
+
+
+class CalendarWeatherInput(TypedDict, total=False):
+    calendar_id: int  # Calendar's type-specific id.
+    day: int
+    month: int
+    year: int
+    weather: str | None  # Freeform description (e.g. "Rain", "Blizzard")
+    temperature: str | None  # Freeform (e.g. "Cold", "-10°C")
+    is_hidden: bool | None
+
+
+class CalendarWeatherUpdate(TypedDict, total=False):
+    calendar_id: int
+    weather_id: int
+    day: int | None
+    month: int | None
+    year: int | None
+    weather: str | None
+    temperature: str | None
+    is_hidden: bool | None
+
+
+class CalendarWeatherDeletion(TypedDict):
+    calendar_id: int
+    weather_id: int
+
+
+class CalendarWeatherData(TypedDict, total=False):
+    id: int
+    calendar_id: int
+    day: int
+    month: int
+    year: int
+    weather: str | None
+    temperature: str | None
+    is_hidden: bool
+    created_at: str | None
+    updated_at: str | None
+
+
+class ListCalendarWeatherParams(TypedDict):
+    calendar_id: int
+
+
+class ListCalendarWeatherResult(TypedDict):
+    calendar_id: int
+    weather: list[CalendarWeatherData]
+    success: bool
+    error: str | None
+
+
+class CreateCalendarWeatherParams(TypedDict):
+    items: list[CalendarWeatherInput]
+
+
+class CreateCalendarWeatherResult(TypedDict):
+    calendar_id: int
+    weather_id: int | None
+    success: bool
+    error: str | None
+
+
+class UpdateCalendarWeatherParams(TypedDict):
+    updates: list[CalendarWeatherUpdate]
+
+
+class UpdateCalendarWeatherResult(TypedDict):
+    calendar_id: int
+    weather_id: int
+    success: bool
+    error: str | None
+
+
+class DeleteCalendarWeatherParams(TypedDict):
+    deletions: list[CalendarWeatherDeletion]
+
+
+class DeleteCalendarWeatherResult(TypedDict):
+    calendar_id: int
+    weather_id: int
+    success: bool
+    error: str | None
+
+
+# =============================================================================
+# Phase F: timeline_eras
+# =============================================================================
+#
+# Endpoint: /timelines/{timeline_type_id}/timeline_eras
+
+
+class TimelineEraInput(TypedDict, total=False):
+    timeline_id: int  # Timeline's type-specific id.
+    name: str
+    abbreviation: str | None
+    start_year: int | None
+    end_year: int | None
+    entry: str | None
+    position: int | None
+    is_collapsed: bool | None
+
+
+class TimelineEraUpdate(TypedDict, total=False):
+    timeline_id: int
+    era_id: int
+    name: str | None
+    abbreviation: str | None
+    start_year: int | None
+    end_year: int | None
+    entry: str | None
+    position: int | None
+    is_collapsed: bool | None
+
+
+class TimelineEraDeletion(TypedDict):
+    timeline_id: int
+    era_id: int
+
+
+class TimelineEraData(TypedDict, total=False):
+    id: int
+    name: str
+    abbreviation: str | None
+    start_year: int | None
+    end_year: int | None
+    entry: str | None
+    position: int
+    is_collapsed: bool
+    elements: list[Any]  # Nested elements when included
+
+
+class ListTimelineErasParams(TypedDict):
+    timeline_id: int
+
+
+class ListTimelineErasResult(TypedDict):
+    timeline_id: int
+    eras: list[TimelineEraData]
+    success: bool
+    error: str | None
+
+
+class CreateTimelineErasParams(TypedDict):
+    items: list[TimelineEraInput]
+
+
+class CreateTimelineEraResult(TypedDict):
+    timeline_id: int
+    era_id: int | None
+    success: bool
+    error: str | None
+
+
+class UpdateTimelineErasParams(TypedDict):
+    updates: list[TimelineEraUpdate]
+
+
+class UpdateTimelineEraResult(TypedDict):
+    timeline_id: int
+    era_id: int
+    success: bool
+    error: str | None
+
+
+class DeleteTimelineErasParams(TypedDict):
+    deletions: list[TimelineEraDeletion]
+
+
+class DeleteTimelineEraResult(TypedDict):
+    timeline_id: int
+    era_id: int
+    success: bool
+    error: str | None
+
+
+# =============================================================================
+# Phase F: timeline_elements
+# =============================================================================
+#
+# Endpoint: /timelines/{timeline_type_id}/timeline_elements
+
+
+class TimelineElementInput(TypedDict, total=False):
+    timeline_id: int
+    era_id: int  # Which era this element belongs to.
+    name: str | None
+    entity_id: int | None  # Optional link to an entity.
+    date: str | None
+    entry: str | None
+    colour: str | None
+    position: int | None
+    icon: str | None
+    is_collapsed: bool | None
+    is_hidden: bool | None
+    use_entity_entry: bool | None
+
+
+class TimelineElementUpdate(TypedDict, total=False):
+    timeline_id: int
+    element_id: int
+    era_id: int | None
+    name: str | None
+    entity_id: int | None
+    date: str | None
+    entry: str | None
+    colour: str | None
+    position: int | None
+    icon: str | None
+    is_collapsed: bool | None
+    is_hidden: bool | None
+    use_entity_entry: bool | None
+
+
+class TimelineElementDeletion(TypedDict):
+    timeline_id: int
+    element_id: int
+
+
+class TimelineElementData(TypedDict, total=False):
+    id: int
+    era_id: int
+    timeline_id: int
+    entity_id: int | None
+    name: str | None
+    entry: str | None
+    date: str | None
+    colour: str
+    position: int
+    icon: str | None
+    is_collapsed: bool
+    is_hidden: bool
+    use_entity_entry: bool
+
+
+class ListTimelineElementsParams(TypedDict):
+    timeline_id: int
+
+
+class ListTimelineElementsResult(TypedDict):
+    timeline_id: int
+    elements: list[TimelineElementData]
+    success: bool
+    error: str | None
+
+
+class CreateTimelineElementsParams(TypedDict):
+    items: list[TimelineElementInput]
+
+
+class CreateTimelineElementResult(TypedDict):
+    timeline_id: int
+    era_id: int
+    element_id: int | None
+    success: bool
+    error: str | None
+
+
+class UpdateTimelineElementsParams(TypedDict):
+    updates: list[TimelineElementUpdate]
+
+
+class UpdateTimelineElementResult(TypedDict):
+    timeline_id: int
+    element_id: int
+    success: bool
+    error: str | None
+
+
+class DeleteTimelineElementsParams(TypedDict):
+    deletions: list[TimelineElementDeletion]
+
+
+class DeleteTimelineElementResult(TypedDict):
+    timeline_id: int
+    element_id: int
+    success: bool
+    error: str | None

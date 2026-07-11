@@ -33,12 +33,15 @@ from .types import (
     VALID_ATTRIBUTE_TYPES,
     AttributeData,
     AttributeType,
+    CalendarWeatherData,
     EntityAbilityData,
     EntityType,
     InventoryData,
     OrganisationMemberData,
     QuestElementData,
     RelationData,
+    TimelineElementData,
+    TimelineEraData,
 )
 
 logger = logging.getLogger(__name__)
@@ -679,6 +682,7 @@ class KankaService:
         header_uuid: str | None = None,
         title: str | None = None,
         race_ids: list[int] | None = None,
+        date: str | None = None,
     ) -> bool:
         """
         Update an existing entity.
@@ -696,6 +700,8 @@ class KankaService:
             title: Character's title field (characters only, e.g. "The Wise").
             race_ids: List of race TYPE-SPECIFIC ids the character belongs to.
                 (Characters only. Use ``get_entities`` to look up type_ids.)
+            date: Calendar's current date, e.g. "741-5-27" (calendars only).
+                Great for advancing the campaign clock.
 
         Returns:
             True if successful
@@ -739,6 +745,10 @@ class KankaService:
                     data["title"] = title
                 if race_ids is not None:
                     data["races"] = race_ids
+
+            # Handle calendar-specific field (current date).
+            if entity_type == "calendar" and date is not None:
+                data["date"] = date
 
             # Handle image fields
             if image_uuid is not None:
@@ -2119,6 +2129,509 @@ class KankaService:
             "is_hidden": visibility_id == 2,
             "created_at": raw.get("created_at"),
             "updated_at": raw.get("updated_at"),
+        }
+
+    # =========================================================================
+    # Calendar weather (Phase F)
+    # =========================================================================
+    #
+    # Endpoint URL uses the calendar's TYPE-specific id.
+
+    def list_calendar_weather(
+        self, calendar_id: int
+    ) -> list[CalendarWeatherData]:
+        try:
+            resp = self.client._request(
+                "GET", f"calendars/{calendar_id}/calendar_weather"
+            )
+            return [
+                self._calendar_weather_to_dict(r)
+                for r in resp.get("data", [])
+            ]
+        except Exception as e:
+            logger.error(
+                f"list_calendar_weather failed for calendar {calendar_id}: {e}"
+            )
+            raise
+
+    def create_calendar_weather(
+        self,
+        calendar_id: int,
+        day: int,
+        month: int,
+        year: int,
+        weather: str | None = None,
+        temperature: str | None = None,
+        is_hidden: bool | None = None,
+    ) -> CalendarWeatherData:
+        payload: dict[str, Any] = {
+            "day": day,
+            "month": month,
+            "year": year,
+        }
+        if weather is not None:
+            payload["weather"] = weather
+        if temperature is not None:
+            payload["temperature"] = temperature
+        if is_hidden is not None:
+            payload["visibility_id"] = 2 if is_hidden else 1
+        try:
+            resp = self.client._request(
+                "POST",
+                f"calendars/{calendar_id}/calendar_weather",
+                json=payload,
+            )
+            return self._calendar_weather_to_dict(resp.get("data") or {})
+        except Exception as e:
+            logger.error(
+                f"create_calendar_weather failed (calendar={calendar_id}): {e}"
+            )
+            raise
+
+    def update_calendar_weather(
+        self,
+        calendar_id: int,
+        weather_id: int,
+        day: int | None = None,
+        month: int | None = None,
+        year: int | None = None,
+        weather: str | None = None,
+        temperature: str | None = None,
+        is_hidden: bool | None = None,
+    ) -> CalendarWeatherData:
+        """Update a calendar weather entry.
+
+        Kanka's PATCH requires ``day``, ``month``, ``year``, and ``weather``
+        to be present. We auto-fetch missing identity fields from the current
+        row so partial updates work.
+        """
+        need_fetch = (
+            day is None
+            or month is None
+            or year is None
+            or weather is None
+        )
+        current: CalendarWeatherData | None = None
+        if need_fetch:
+            current = next(
+                (
+                    r
+                    for r in self.list_calendar_weather(calendar_id)
+                    if r.get("id") == weather_id
+                ),
+                None,
+            )
+            if current is None:
+                raise ValueError(
+                    f"calendar_weather {weather_id} not found on calendar "
+                    f"{calendar_id}"
+                )
+        payload: dict[str, Any] = {}
+        payload["day"] = day if day is not None else current["day"]  # type: ignore[index]
+        payload["month"] = month if month is not None else current["month"]  # type: ignore[index]
+        payload["year"] = year if year is not None else current["year"]  # type: ignore[index]
+        payload["weather"] = (
+            weather if weather is not None else current.get("weather") or ""  # type: ignore[union-attr]
+        )
+        if temperature is not None:
+            payload["temperature"] = temperature
+        if is_hidden is not None:
+            payload["visibility_id"] = 2 if is_hidden else 1
+        try:
+            resp = self.client._request(
+                "PATCH",
+                f"calendars/{calendar_id}/calendar_weather/{weather_id}",
+                json=payload,
+            )
+            return self._calendar_weather_to_dict(resp.get("data") or {})
+        except Exception as e:
+            logger.error(
+                f"update_calendar_weather failed (calendar={calendar_id}, "
+                f"row={weather_id}): {e}"
+            )
+            raise
+
+    def delete_calendar_weather(
+        self, calendar_id: int, weather_id: int
+    ) -> bool:
+        try:
+            self.client._request(
+                "DELETE",
+                f"calendars/{calendar_id}/calendar_weather/{weather_id}",
+            )
+            return True
+        except Exception as e:
+            logger.error(
+                f"delete_calendar_weather failed (calendar={calendar_id}, "
+                f"row={weather_id}): {e}"
+            )
+            raise
+
+    @staticmethod
+    def _calendar_weather_to_dict(raw: dict[str, Any]) -> CalendarWeatherData:
+        visibility_id = raw.get("visibility_id")
+        return {
+            "id": raw.get("id"),
+            "calendar_id": raw.get("calendar_id"),
+            "day": raw.get("day", 0) or 0,
+            "month": raw.get("month", 0) or 0,
+            "year": raw.get("year", 0) or 0,
+            "weather": raw.get("weather"),
+            "temperature": raw.get("temperature"),
+            "is_hidden": visibility_id == 2,
+            "created_at": raw.get("created_at"),
+            "updated_at": raw.get("updated_at"),
+        }
+
+    # =========================================================================
+    # Timeline eras (Phase F)
+    # =========================================================================
+    #
+    # URL uses the timeline's TYPE-specific id.
+
+    def list_timeline_eras(self, timeline_id: int) -> list[TimelineEraData]:
+        try:
+            resp = self.client._request(
+                "GET", f"timelines/{timeline_id}/timeline_eras"
+            )
+            return [
+                self._timeline_era_to_dict(r) for r in resp.get("data", [])
+            ]
+        except Exception as e:
+            logger.error(
+                f"list_timeline_eras failed for timeline {timeline_id}: {e}"
+            )
+            raise
+
+    def create_timeline_era(
+        self,
+        timeline_id: int,
+        name: str,
+        abbreviation: str | None = None,
+        start_year: int | None = None,
+        end_year: int | None = None,
+        entry: str | None = None,
+        position: int | None = None,
+        is_collapsed: bool | None = None,
+    ) -> TimelineEraData:
+        payload: dict[str, Any] = {"name": name}
+        if abbreviation is not None:
+            payload["abbreviation"] = abbreviation
+        if start_year is not None:
+            payload["start_year"] = start_year
+        if end_year is not None:
+            payload["end_year"] = end_year
+        if entry is not None:
+            payload["entry"] = self.converter.markdown_to_html(entry)
+        if position is not None:
+            payload["position"] = position
+        if is_collapsed is not None:
+            payload["is_collapsed"] = is_collapsed
+        try:
+            resp = self.client._request(
+                "POST",
+                f"timelines/{timeline_id}/timeline_eras",
+                json=payload,
+            )
+            return self._timeline_era_to_dict(resp.get("data") or {})
+        except Exception as e:
+            logger.error(
+                f"create_timeline_era failed (timeline={timeline_id}): {e}"
+            )
+            raise
+
+    def update_timeline_era(
+        self,
+        timeline_id: int,
+        era_id: int,
+        name: str | None = None,
+        abbreviation: str | None = None,
+        start_year: int | None = None,
+        end_year: int | None = None,
+        entry: str | None = None,
+        position: int | None = None,
+        is_collapsed: bool | None = None,
+    ) -> TimelineEraData:
+        """Update a timeline era.
+
+        Kanka's PATCH requires ``name`` — if the caller doesn't supply it,
+        we fetch the current era so partial updates work.
+        """
+        payload: dict[str, Any] = {}
+        if name is None:
+            current = next(
+                (
+                    r
+                    for r in self.list_timeline_eras(timeline_id)
+                    if r.get("id") == era_id
+                ),
+                None,
+            )
+            if current is None:
+                raise ValueError(
+                    f"timeline era {era_id} not found on timeline {timeline_id}"
+                )
+            payload["name"] = current.get("name") or ""
+        else:
+            payload["name"] = name
+        if abbreviation is not None:
+            payload["abbreviation"] = abbreviation
+        if start_year is not None:
+            payload["start_year"] = start_year
+        if end_year is not None:
+            payload["end_year"] = end_year
+        if entry is not None:
+            payload["entry"] = self.converter.markdown_to_html(entry)
+        if position is not None:
+            payload["position"] = position
+        if is_collapsed is not None:
+            payload["is_collapsed"] = is_collapsed
+        try:
+            resp = self.client._request(
+                "PATCH",
+                f"timelines/{timeline_id}/timeline_eras/{era_id}",
+                json=payload,
+            )
+            return self._timeline_era_to_dict(resp.get("data") or {})
+        except Exception as e:
+            logger.error(
+                f"update_timeline_era failed (timeline={timeline_id}, "
+                f"era={era_id}): {e}"
+            )
+            raise
+
+    def delete_timeline_era(self, timeline_id: int, era_id: int) -> bool:
+        try:
+            self.client._request(
+                "DELETE", f"timelines/{timeline_id}/timeline_eras/{era_id}"
+            )
+            return True
+        except Exception as e:
+            logger.error(
+                f"delete_timeline_era failed (timeline={timeline_id}, "
+                f"era={era_id}): {e}"
+            )
+            raise
+
+    def _timeline_era_to_dict(self, raw: dict[str, Any]) -> TimelineEraData:
+        entry_html = raw.get("entry")
+        return {
+            "id": raw.get("id"),
+            "name": raw.get("name", ""),
+            "abbreviation": raw.get("abbreviation"),
+            "start_year": raw.get("start_year"),
+            "end_year": raw.get("end_year"),
+            "entry": (
+                self.converter.html_to_markdown(entry_html)
+                if entry_html
+                else None
+            ),
+            "position": raw.get("position", 0) or 0,
+            "is_collapsed": bool(raw.get("is_collapsed", False)),
+            "elements": raw.get("elements", []),
+        }
+
+    # =========================================================================
+    # Timeline elements (Phase F)
+    # =========================================================================
+    #
+    # URL uses the timeline's TYPE-specific id.
+
+    def list_timeline_elements(
+        self, timeline_id: int
+    ) -> list[TimelineElementData]:
+        try:
+            resp = self.client._request(
+                "GET", f"timelines/{timeline_id}/timeline_elements"
+            )
+            return [
+                self._timeline_element_to_dict(r)
+                for r in resp.get("data", [])
+            ]
+        except Exception as e:
+            logger.error(
+                f"list_timeline_elements failed for timeline "
+                f"{timeline_id}: {e}"
+            )
+            raise
+
+    def create_timeline_element(
+        self,
+        timeline_id: int,
+        era_id: int,
+        name: str | None = None,
+        entity_id: int | None = None,
+        date: str | None = None,
+        entry: str | None = None,
+        colour: str | None = None,
+        position: int | None = None,
+        icon: str | None = None,
+        is_collapsed: bool | None = None,
+        is_hidden: bool | None = None,
+        use_entity_entry: bool | None = None,
+    ) -> TimelineElementData:
+        if entity_id is None and not name:
+            raise ValueError(
+                "create_timeline_element needs entity_id or name"
+            )
+        payload: dict[str, Any] = {"era_id": era_id}
+        if entity_id is not None:
+            payload["entity_id"] = entity_id
+        if name is not None:
+            payload["name"] = name
+        if date is not None:
+            payload["date"] = date
+        if entry is not None:
+            payload["entry"] = self.converter.markdown_to_html(entry)
+        if colour is not None:
+            payload["colour"] = colour
+        if position is not None:
+            payload["position"] = position
+        if icon is not None:
+            payload["icon"] = icon
+        if is_collapsed is not None:
+            payload["is_collapsed"] = is_collapsed
+        if is_hidden is not None:
+            payload["visibility_id"] = 2 if is_hidden else 1
+        if use_entity_entry is not None:
+            payload["use_entity_entry"] = use_entity_entry
+        try:
+            resp = self.client._request(
+                "POST",
+                f"timelines/{timeline_id}/timeline_elements",
+                json=payload,
+            )
+            return self._timeline_element_to_dict(resp.get("data") or {})
+        except Exception as e:
+            logger.error(
+                f"create_timeline_element failed (timeline={timeline_id}, "
+                f"era={era_id}): {e}"
+            )
+            raise
+
+    def update_timeline_element(
+        self,
+        timeline_id: int,
+        element_id: int,
+        era_id: int | None = None,
+        entity_id: int | None = None,
+        name: str | None = None,
+        date: str | None = None,
+        entry: str | None = None,
+        colour: str | None = None,
+        position: int | None = None,
+        icon: str | None = None,
+        is_collapsed: bool | None = None,
+        is_hidden: bool | None = None,
+        use_entity_entry: bool | None = None,
+    ) -> TimelineElementData:
+        """Update a timeline element.
+
+        Kanka's PATCH requires ``era_id`` AND one of ``entity_id`` / ``name``.
+        The service auto-fetches the current row for any missing identity
+        field so partial updates work.
+        """
+        need_fetch = (
+            era_id is None or (entity_id is None and not name)
+        )
+        current: TimelineElementData | None = None
+        if need_fetch:
+            current = next(
+                (
+                    r
+                    for r in self.list_timeline_elements(timeline_id)
+                    if r.get("id") == element_id
+                ),
+                None,
+            )
+            if current is None:
+                raise ValueError(
+                    f"timeline element {element_id} not found on timeline "
+                    f"{timeline_id}"
+                )
+        payload: dict[str, Any] = {}
+        payload["era_id"] = (
+            era_id if era_id is not None else current["era_id"]  # type: ignore[index]
+        )
+        if entity_id is not None:
+            payload["entity_id"] = entity_id
+        elif name is None and current is not None:
+            # Fill in whichever identity field the row currently has.
+            if current.get("entity_id") is not None:
+                payload["entity_id"] = current["entity_id"]
+            elif current.get("name"):
+                payload["name"] = current["name"]
+        if name is not None:
+            payload["name"] = name
+        if date is not None:
+            payload["date"] = date
+        if entry is not None:
+            payload["entry"] = self.converter.markdown_to_html(entry)
+        if colour is not None:
+            payload["colour"] = colour
+        if position is not None:
+            payload["position"] = position
+        if icon is not None:
+            payload["icon"] = icon
+        if is_collapsed is not None:
+            payload["is_collapsed"] = is_collapsed
+        if is_hidden is not None:
+            payload["visibility_id"] = 2 if is_hidden else 1
+        if use_entity_entry is not None:
+            payload["use_entity_entry"] = use_entity_entry
+        try:
+            resp = self.client._request(
+                "PATCH",
+                f"timelines/{timeline_id}/timeline_elements/{element_id}",
+                json=payload,
+            )
+            return self._timeline_element_to_dict(resp.get("data") or {})
+        except Exception as e:
+            logger.error(
+                f"update_timeline_element failed (timeline={timeline_id}, "
+                f"element={element_id}): {e}"
+            )
+            raise
+
+    def delete_timeline_element(
+        self, timeline_id: int, element_id: int
+    ) -> bool:
+        try:
+            self.client._request(
+                "DELETE",
+                f"timelines/{timeline_id}/timeline_elements/{element_id}",
+            )
+            return True
+        except Exception as e:
+            logger.error(
+                f"delete_timeline_element failed (timeline={timeline_id}, "
+                f"element={element_id}): {e}"
+            )
+            raise
+
+    def _timeline_element_to_dict(
+        self, raw: dict[str, Any]
+    ) -> TimelineElementData:
+        visibility_id = raw.get("visibility_id")
+        entry_html = raw.get("entry")
+        return {
+            "id": raw.get("id"),
+            "era_id": raw.get("era_id"),
+            "timeline_id": raw.get("timeline_id"),
+            "entity_id": raw.get("entity_id"),
+            "name": raw.get("name"),
+            "entry": (
+                self.converter.html_to_markdown(entry_html)
+                if entry_html
+                else None
+            ),
+            "date": raw.get("date"),
+            "colour": raw.get("colour", "") or "",
+            "position": raw.get("position", 0) or 0,
+            "icon": raw.get("icon"),
+            "is_collapsed": bool(raw.get("is_collapsed", False)),
+            "is_hidden": visibility_id == 2,
+            "use_entity_entry": bool(raw.get("use_entity_entry", False)),
         }
 
 

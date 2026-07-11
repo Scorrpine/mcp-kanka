@@ -2,6 +2,46 @@
 
 All notable changes to this fork are documented here. This fork is based on [ervwalter/mcp-kanka](https://github.com/ervwalter/mcp-kanka).
 
+## [2.0.0a6] - 2026-07-11
+
+### Phase F: Calendar and timeline sub-resources
+
+Adds three sub-resource families (12 CRUD tools) plus a `date` field on `update_entities` for advancing calendars. Tool count grows from 33 to 45.
+
+#### Sub-resource tool families
+
+**Calendar weather** (weather entries pinned to calendar days):
+- `list_calendar_weather`, `create_calendar_weather`, `update_calendar_weather`, `delete_calendar_weather`
+
+**Timeline eras** (major periods on a timeline):
+- `list_timeline_eras`, `create_timeline_eras`, `update_timeline_eras`, `delete_timeline_eras`
+
+**Timeline elements** (events within eras, optionally linked to entities):
+- `list_timeline_elements`, `create_timeline_elements`, `update_timeline_elements`, `delete_timeline_elements`
+
+#### Calendar current-date on `update_entities`
+
+New `date` field on calendar-type entity updates. String format is `"year-month-day"` (e.g. `"741-6-1"`). Great for advancing the campaign clock from the MCP. Silently ignored for non-calendar entity types.
+
+#### Skipped from this phase
+
+- Calendar **months / moons / seasons / weekdays / years** are top-level array fields on the calendar entity itself, not real sub-resources. Editing them programmatically is rare and error-prone (leap-year setup, weekday ordering, etc.); this is better done in the Kanka UI. Reading them: use `get_entities` with `related=true` on the calendar; the response includes those arrays.
+
+#### API quirks confirmed via live probe (campaign 396026)
+
+- All three sub-resource URLs use the parent's **type-specific id** (calendar_id, timeline_id).
+- **calendar_weather PATCH** requires `day`, `month`, `year`, and `weather` on every update. The service auto-fetches missing identity fields from the current row so partial updates work.
+- **timeline_eras PATCH** requires `name`. Same auto-fetch behavior.
+- **timeline_elements PATCH** requires `era_id` AND one of `entity_id` / `name`. Same auto-fetch.
+- **timeline_elements** support two forms per row: entity-linked (`entity_id` set) or freeform (`name` set).
+- Kanka's calendar CREATE requires `month_name`, `month_length`, and `weekday` fields at minimum — bare-minimum calendars can't be created through this MCP. Use the Kanka UI to bootstrap a calendar's structure, then use MCP tools for date/weather updates.
+
+### Tests
+
+- 24 new tests in `tests/unit/test_calendar_timeline.py`: HTTP endpoint/verb correctness for all three families, request-body shape, auto-fetch behavior on partial updates, boolean/visibility translations, and batch aggregation with validation and HTTP failures.
+- Full suite: 287 baseline + 24 new = 311 tests passing.
+- Live campaign round-trip: created weather on the existing "Imperial Reckoning" calendar, created an era + element on a scratch timeline, exercised all partial-update paths, deleted everything.
+
 ## [2.0.0a5] - 2026-07-10
 
 ### Phase E: Character sub-resources

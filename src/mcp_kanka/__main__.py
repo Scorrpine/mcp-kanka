@@ -20,6 +20,7 @@ from .resources import get_kanka_context
 from .tools import (
     handle_check_entity_updates,
     handle_create_attributes,
+    handle_create_calendar_weather,
     handle_create_entities,
     handle_create_entity_abilities,
     handle_create_inventory,
@@ -27,7 +28,10 @@ from .tools import (
     handle_create_posts,
     handle_create_quest_elements,
     handle_create_relations,
+    handle_create_timeline_elements,
+    handle_create_timeline_eras,
     handle_delete_attributes,
+    handle_delete_calendar_weather,
     handle_delete_entities,
     handle_delete_entity_abilities,
     handle_delete_inventory,
@@ -35,15 +39,21 @@ from .tools import (
     handle_delete_posts,
     handle_delete_quest_elements,
     handle_delete_relations,
+    handle_delete_timeline_elements,
+    handle_delete_timeline_eras,
     handle_find_entities,
     handle_get_entities,
     handle_list_attributes,
+    handle_list_calendar_weather,
     handle_list_entity_abilities,
     handle_list_inventory,
     handle_list_organisation_members,
     handle_list_quest_elements,
     handle_list_relations,
+    handle_list_timeline_elements,
+    handle_list_timeline_eras,
     handle_update_attributes,
+    handle_update_calendar_weather,
     handle_update_entities,
     handle_update_entity_abilities,
     handle_update_inventory,
@@ -51,6 +61,8 @@ from .tools import (
     handle_update_posts,
     handle_update_quest_elements,
     handle_update_relations,
+    handle_update_timeline_elements,
+    handle_update_timeline_eras,
 )
 from .types import VALID_ATTRIBUTE_TYPES, VALID_ENTITY_TYPES
 
@@ -250,6 +262,15 @@ async def list_tools() -> list[types.Tool]:
                                         "Race TYPE-specific ids (from "
                                         "get_entities' `id` field). Characters "
                                         "only; sets the character's races."
+                                    ),
+                                },
+                                "date": {
+                                    "type": "string",
+                                    "description": (
+                                        "Calendar's current date, e.g. "
+                                        "'741-5-27' (year-month-day format). "
+                                        "Calendars only; use to advance the "
+                                        "campaign clock. Ignored on other types."
                                     ),
                                 },
                             },
@@ -1121,6 +1142,325 @@ async def list_tools() -> list[types.Tool]:
                 "required": ["deletions"],
             },
         ),
+        # =============================================================
+        # Phase F: calendar_weather
+        # =============================================================
+        types.Tool(
+            name="list_calendar_weather",
+            description=(
+                "List weather entries on a calendar. Note: calendar_id is "
+                "the TYPE-specific id."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {"calendar_id": {"type": "integer"}},
+                "required": ["calendar_id"],
+            },
+        ),
+        types.Tool(
+            name="create_calendar_weather",
+            description="Add weather entries to a calendar",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "calendar_id": {"type": "integer"},
+                                "day": {"type": "integer"},
+                                "month": {"type": "integer"},
+                                "year": {"type": "integer"},
+                                "weather": {
+                                    "type": "string",
+                                    "description": (
+                                        "Freeform description, e.g. 'Rain', "
+                                        "'Blizzard'"
+                                    ),
+                                },
+                                "temperature": {
+                                    "type": "string",
+                                    "description": (
+                                        "Freeform, e.g. 'Cold', '-10C'"
+                                    ),
+                                },
+                                "is_hidden": {"type": "boolean"},
+                            },
+                            "required": [
+                                "calendar_id",
+                                "day",
+                                "month",
+                                "year",
+                            ],
+                        },
+                    },
+                },
+                "required": ["items"],
+            },
+        ),
+        types.Tool(
+            name="update_calendar_weather",
+            description="Update existing calendar weather entries",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "updates": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "calendar_id": {"type": "integer"},
+                                "weather_id": {"type": "integer"},
+                                "day": {"type": "integer"},
+                                "month": {"type": "integer"},
+                                "year": {"type": "integer"},
+                                "weather": {"type": "string"},
+                                "temperature": {"type": "string"},
+                                "is_hidden": {"type": "boolean"},
+                            },
+                            "required": ["calendar_id", "weather_id"],
+                        },
+                    },
+                },
+                "required": ["updates"],
+            },
+        ),
+        types.Tool(
+            name="delete_calendar_weather",
+            description="Remove calendar weather entries",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "deletions": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "calendar_id": {"type": "integer"},
+                                "weather_id": {"type": "integer"},
+                            },
+                            "required": ["calendar_id", "weather_id"],
+                        },
+                    },
+                },
+                "required": ["deletions"],
+            },
+        ),
+        # =============================================================
+        # Phase F: timeline_eras
+        # =============================================================
+        types.Tool(
+            name="list_timeline_eras",
+            description=(
+                "List eras on a timeline. Note: timeline_id is the "
+                "TYPE-specific id."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {"timeline_id": {"type": "integer"}},
+                "required": ["timeline_id"],
+            },
+        ),
+        types.Tool(
+            name="create_timeline_eras",
+            description="Add eras to a timeline",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "timeline_id": {"type": "integer"},
+                                "name": {"type": "string"},
+                                "abbreviation": {
+                                    "type": "string",
+                                    "description": "e.g. 'FA', '3E'",
+                                },
+                                "start_year": {"type": "integer"},
+                                "end_year": {"type": "integer"},
+                                "entry": {
+                                    "type": "string",
+                                    "description": "Description in Markdown",
+                                },
+                                "position": {"type": "integer"},
+                                "is_collapsed": {"type": "boolean"},
+                            },
+                            "required": ["timeline_id", "name"],
+                        },
+                    },
+                },
+                "required": ["items"],
+            },
+        ),
+        types.Tool(
+            name="update_timeline_eras",
+            description="Update existing timeline eras",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "updates": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "timeline_id": {"type": "integer"},
+                                "era_id": {"type": "integer"},
+                                "name": {"type": "string"},
+                                "abbreviation": {"type": "string"},
+                                "start_year": {"type": "integer"},
+                                "end_year": {"type": "integer"},
+                                "entry": {"type": "string"},
+                                "position": {"type": "integer"},
+                                "is_collapsed": {"type": "boolean"},
+                            },
+                            "required": ["timeline_id", "era_id"],
+                        },
+                    },
+                },
+                "required": ["updates"],
+            },
+        ),
+        types.Tool(
+            name="delete_timeline_eras",
+            description="Remove eras from a timeline",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "deletions": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "timeline_id": {"type": "integer"},
+                                "era_id": {"type": "integer"},
+                            },
+                            "required": ["timeline_id", "era_id"],
+                        },
+                    },
+                },
+                "required": ["deletions"],
+            },
+        ),
+        # =============================================================
+        # Phase F: timeline_elements
+        # =============================================================
+        types.Tool(
+            name="list_timeline_elements",
+            description=(
+                "List elements on a timeline (across all eras). Note: "
+                "timeline_id is the TYPE-specific id."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {"timeline_id": {"type": "integer"}},
+                "required": ["timeline_id"],
+            },
+        ),
+        types.Tool(
+            name="create_timeline_elements",
+            description=(
+                "Add elements to a timeline era. Either entity_id or name "
+                "is required."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "timeline_id": {"type": "integer"},
+                                "era_id": {"type": "integer"},
+                                "name": {"type": "string"},
+                                "entity_id": {
+                                    "type": "integer",
+                                    "description": "Optional entity link",
+                                },
+                                "date": {
+                                    "type": "string",
+                                    "description": "Freeform, e.g. 'Year 1'",
+                                },
+                                "entry": {
+                                    "type": "string",
+                                    "description": "Description in Markdown",
+                                },
+                                "colour": {"type": "string"},
+                                "position": {"type": "integer"},
+                                "icon": {"type": "string"},
+                                "is_collapsed": {"type": "boolean"},
+                                "is_hidden": {"type": "boolean"},
+                                "use_entity_entry": {
+                                    "type": "boolean",
+                                    "description": (
+                                        "If true, use the linked entity's "
+                                        "entry as this element's description"
+                                    ),
+                                },
+                            },
+                            "required": ["timeline_id", "era_id"],
+                        },
+                    },
+                },
+                "required": ["items"],
+            },
+        ),
+        types.Tool(
+            name="update_timeline_elements",
+            description="Update existing timeline elements",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "updates": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "timeline_id": {"type": "integer"},
+                                "element_id": {"type": "integer"},
+                                "era_id": {"type": "integer"},
+                                "entity_id": {"type": "integer"},
+                                "name": {"type": "string"},
+                                "date": {"type": "string"},
+                                "entry": {"type": "string"},
+                                "colour": {"type": "string"},
+                                "position": {"type": "integer"},
+                                "icon": {"type": "string"},
+                                "is_collapsed": {"type": "boolean"},
+                                "is_hidden": {"type": "boolean"},
+                                "use_entity_entry": {"type": "boolean"},
+                            },
+                            "required": ["timeline_id", "element_id"],
+                        },
+                    },
+                },
+                "required": ["updates"],
+            },
+        ),
+        types.Tool(
+            name="delete_timeline_elements",
+            description="Remove elements from a timeline",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "deletions": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "timeline_id": {"type": "integer"},
+                                "element_id": {"type": "integer"},
+                            },
+                            "required": ["timeline_id", "element_id"],
+                        },
+                    },
+                },
+                "required": ["deletions"],
+            },
+        ),
     ]
 
 
@@ -1198,6 +1538,31 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
             result = await handle_update_quest_elements(**arguments)
         elif name == "delete_quest_elements":
             result = await handle_delete_quest_elements(**arguments)
+        # Phase F: calendar_weather + timeline_eras + timeline_elements
+        elif name == "list_calendar_weather":
+            result = await handle_list_calendar_weather(**arguments)
+        elif name == "create_calendar_weather":
+            result = await handle_create_calendar_weather(**arguments)
+        elif name == "update_calendar_weather":
+            result = await handle_update_calendar_weather(**arguments)
+        elif name == "delete_calendar_weather":
+            result = await handle_delete_calendar_weather(**arguments)
+        elif name == "list_timeline_eras":
+            result = await handle_list_timeline_eras(**arguments)
+        elif name == "create_timeline_eras":
+            result = await handle_create_timeline_eras(**arguments)
+        elif name == "update_timeline_eras":
+            result = await handle_update_timeline_eras(**arguments)
+        elif name == "delete_timeline_eras":
+            result = await handle_delete_timeline_eras(**arguments)
+        elif name == "list_timeline_elements":
+            result = await handle_list_timeline_elements(**arguments)
+        elif name == "create_timeline_elements":
+            result = await handle_create_timeline_elements(**arguments)
+        elif name == "update_timeline_elements":
+            result = await handle_update_timeline_elements(**arguments)
+        elif name == "delete_timeline_elements":
+            result = await handle_delete_timeline_elements(**arguments)
         else:
             raise ValueError(f"Unknown tool: {name}")
 
