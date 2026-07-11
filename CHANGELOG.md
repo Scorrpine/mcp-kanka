@@ -2,6 +2,48 @@
 
 All notable changes to this fork are documented here. This fork is based on [ervwalter/mcp-kanka](https://github.com/ervwalter/mcp-kanka).
 
+## [2.0.0a5] - 2026-07-10
+
+### Phase E: Character sub-resources
+
+Adds four sub-resource families of CRUD tools, plus two new character-only fields on `update_entities`. Tool count grows from 17 to 33.
+
+#### Sub-resource tool families (16 new tools)
+
+**Entity abilities** (attach ability entities to characters/creatures):
+- `list_entity_abilities`, `create_entity_abilities`, `update_entity_abilities`, `delete_entity_abilities`
+
+**Inventory** (items in an entity's inventory, either linked to a Kanka Item or freeform):
+- `list_inventory`, `create_inventory`, `update_inventory`, `delete_inventory`
+
+**Organisation members** (character-in-organisation memberships with role/hierarchy):
+- `list_organisation_members`, `create_organisation_members`, `update_organisation_members`, `delete_organisation_members`
+
+**Quest elements** (entities referenced from a quest, or freeform named elements):
+- `list_quest_elements`, `create_quest_elements`, `update_quest_elements`, `delete_quest_elements`
+
+#### Character field extensions on `update_entities`
+
+Two new optional fields, applied only when the target entity is a character (silently ignored for other types):
+
+- `title`: the character's title, e.g. `"The Wise"`, `"Warden of the North"`
+- `race_ids`: list of race TYPE-specific ids (from `get_entities`' `id` field)
+
+#### Important API quirks (confirmed via live probe on campaign 396026)
+
+- Cross-cutting: many of these endpoints require **type-specific IDs**, not entity_ids. `ability_id`, `item_id`, `character_id`, `organisation_id`, `quest_id`, and `race_ids` are all type-specific ids. Get them from the `id` field of `get_entities` results (versus `entity_id`).
+- **Entity abilities**: POST accepts `abilities: [id]` array (array-of-one for single-row create). PATCH also requires `abilities` in the payload, so the service auto-fetches the current row's `ability_id` when the caller omits it, preserving a friendly partial-update experience.
+- **Inventory**: `entity_id` must appear in BOTH the URL path and the JSON body. PATCH requires at least one of `item_id` or `name` — the service auto-fetches to fill in.
+- **Organisation members**: URL uses the organisation's type-specific id, and both `organisation_id` and `character_id` in the body are also type-specific ids (redundant).
+- **Quest elements**: `entry` is stored as HTML on Kanka's side; the service converts markdown → HTML on write and HTML → markdown on read (same as post/entity entries).
+- **Journal readers**: The `/journals/{id}/journal_readers` endpoint returns 404 in the current Kanka API version. Skipped from this fork until upstream exposes it.
+
+### Tests
+
+- 30 new tests in `tests/unit/test_sub_resources.py`: HTTP endpoint/verb correctness for all four families, request-body shape (including the `entity_id`-in-body inventory quirk and the `abilities`-array entity_ability quirk), auto-fetch behavior on partial updates, batch aggregation with mixed validation + HTTP failures, and character title/race_ids field-guard behavior on non-character entity types.
+- Full suite: 257 baseline + 30 new = 287 tests passing.
+- Live campaign round-trip: created scratch character + ability + item + org + quest + race; attached ability, added inventory rows (both linked and freeform), added org membership, added quest elements (both linked and freeform), updated one row from each family via **partial** update, deleted all rows, and confirmed cleanup.
+
 ## [2.0.0a4] - 2026-07-10
 
 ### Phase D: Relation CRUD

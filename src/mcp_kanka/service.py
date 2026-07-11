@@ -33,7 +33,11 @@ from .types import (
     VALID_ATTRIBUTE_TYPES,
     AttributeData,
     AttributeType,
+    EntityAbilityData,
     EntityType,
+    InventoryData,
+    OrganisationMemberData,
+    QuestElementData,
     RelationData,
 )
 
@@ -673,6 +677,8 @@ class KankaService:
         is_completed: bool | None = None,
         image_uuid: str | None = None,
         header_uuid: str | None = None,
+        title: str | None = None,
+        race_ids: list[int] | None = None,
     ) -> bool:
         """
         Update an existing entity.
@@ -687,6 +693,9 @@ class KankaService:
             is_completed: Whether quest is completed (quests only)
             image_uuid: Image gallery UUID for entity image
             header_uuid: Image gallery UUID for entity header
+            title: Character's title field (characters only, e.g. "The Wise").
+            race_ids: List of race TYPE-SPECIFIC ids the character belongs to.
+                (Characters only. Use ``get_entities`` to look up type_ids.)
 
         Returns:
             True if successful
@@ -723,6 +732,13 @@ class KankaService:
             # Handle quest-specific field
             if entity_type == "quest" and is_completed is not None:
                 data["is_completed"] = is_completed
+
+            # Handle character-specific fields (title, races).
+            if entity_type == "character":
+                if title is not None:
+                    data["title"] = title
+                if race_ids is not None:
+                    data["races"] = race_ids
 
             # Handle image fields
             if image_uuid is not None:
@@ -1495,6 +1511,612 @@ class KankaService:
             "is_hidden": visibility_id == 2,
             "is_two_way": raw.get("mirror_id") is not None,
             "mirror_id": raw.get("mirror_id"),
+            "created_at": raw.get("created_at"),
+            "updated_at": raw.get("updated_at"),
+        }
+
+    # =========================================================================
+    # Entity abilities (Phase E)
+    # =========================================================================
+
+    def list_entity_abilities(self, entity_id: int) -> list[EntityAbilityData]:
+        """List all ability attachments on an entity."""
+        try:
+            resp = self.client._request(
+                "GET", f"entities/{entity_id}/entity_abilities"
+            )
+            return [
+                self._entity_ability_to_dict(r) for r in resp.get("data", [])
+            ]
+        except Exception as e:
+            logger.error(
+                f"list_entity_abilities failed for entity {entity_id}: {e}"
+            )
+            raise
+
+    def create_entity_ability(
+        self,
+        entity_id: int,
+        ability_id: int,
+        charges: int | None = None,
+        note: str | None = None,
+        position: int | None = None,
+        is_hidden: bool | None = None,
+    ) -> EntityAbilityData:
+        """Attach an ability entity to an entity.
+
+        Args:
+            entity_id: The entity gaining the ability.
+            ability_id: The ability's TYPE-specific id (not entity_id).
+                Get it from ``get_entities`` result's ``id`` field.
+        """
+        # Kanka's POST accepts an ``abilities: [id]`` array. A single call can
+        # attach multiple; we standardize on one-per-call and return the
+        # newly-created row.
+        payload: dict[str, Any] = {"abilities": [ability_id]}
+        if charges is not None:
+            payload["charges"] = charges
+        if note is not None:
+            payload["note"] = note
+        if position is not None:
+            payload["position"] = position
+        if is_hidden is not None:
+            payload["visibility_id"] = 2 if is_hidden else 1
+        try:
+            resp = self.client._request(
+                "POST",
+                f"entities/{entity_id}/entity_abilities",
+                json=payload,
+            )
+            data = resp.get("data")
+            if isinstance(data, list) and data:
+                data = data[-1]  # newest
+            elif not isinstance(data, dict):
+                raise ValueError(
+                    "Unexpected empty response from create_entity_ability"
+                )
+            result = self._entity_ability_to_dict(data)
+            # The API doesn't echo entity_id back in the ability row; inject.
+            result["entity_id"] = entity_id
+            return result
+        except Exception as e:
+            logger.error(
+                f"create_entity_ability failed (entity={entity_id}, "
+                f"ability={ability_id}): {e}"
+            )
+            raise
+
+    def update_entity_ability(
+        self,
+        entity_id: int,
+        entity_ability_id: int,
+        ability_id: int | None = None,
+        charges: int | None = None,
+        note: str | None = None,
+        position: int | None = None,
+        is_hidden: bool | None = None,
+    ) -> EntityAbilityData:
+        """Update an existing entity_ability row.
+
+        Kanka's PATCH requires ``abilities`` to be present. If the caller
+        doesn't supply ``ability_id``, we fetch the current row and reuse
+        its ability_id so partial updates work as expected.
+        """
+        payload: dict[str, Any] = {}
+        if ability_id is None:
+            # Fetch current row to pick up its ability_id.
+            current = next(
+                (
+                    r
+                    for r in self.list_entity_abilities(entity_id)
+                    if r.get("id") == entity_ability_id
+                ),
+                None,
+            )
+            if current is None:
+                raise ValueError(
+                    f"entity_ability {entity_ability_id} not found on "
+                    f"entity {entity_id}"
+                )
+            ability_id = current.get("ability_id")
+        payload["abilities"] = [ability_id]
+        if charges is not None:
+            payload["charges"] = charges
+        if note is not None:
+            payload["note"] = note
+        if position is not None:
+            payload["position"] = position
+        if is_hidden is not None:
+            payload["visibility_id"] = 2 if is_hidden else 1
+        try:
+            resp = self.client._request(
+                "PATCH",
+                f"entities/{entity_id}/entity_abilities/{entity_ability_id}",
+                json=payload,
+            )
+            data = resp.get("data") or {}
+            result = self._entity_ability_to_dict(data)
+            result.setdefault("entity_id", entity_id)
+            return result
+        except Exception as e:
+            logger.error(
+                f"update_entity_ability failed (entity={entity_id}, "
+                f"row={entity_ability_id}): {e}"
+            )
+            raise
+
+    def delete_entity_ability(
+        self, entity_id: int, entity_ability_id: int
+    ) -> bool:
+        """Remove an ability attachment from an entity."""
+        try:
+            self.client._request(
+                "DELETE",
+                f"entities/{entity_id}/entity_abilities/{entity_ability_id}",
+            )
+            return True
+        except Exception as e:
+            logger.error(
+                f"delete_entity_ability failed (entity={entity_id}, "
+                f"row={entity_ability_id}): {e}"
+            )
+            raise
+
+    @staticmethod
+    def _entity_ability_to_dict(raw: dict[str, Any]) -> EntityAbilityData:
+        visibility_id = raw.get("visibility_id")
+        return {
+            "id": raw.get("id"),
+            "entity_id": raw.get("entity_id"),
+            "ability_id": raw.get("ability_id"),
+            "charges": raw.get("charges"),
+            "note": raw.get("note"),
+            "position": raw.get("position", 0) or 0,
+            "is_hidden": visibility_id == 2,
+            "created_at": raw.get("created_at"),
+            "updated_at": raw.get("updated_at"),
+        }
+
+    # =========================================================================
+    # Inventory (Phase E)
+    # =========================================================================
+
+    def list_inventory(self, entity_id: int) -> list[InventoryData]:
+        """List all inventory rows for an entity."""
+        try:
+            resp = self.client._request(
+                "GET", f"entities/{entity_id}/inventory"
+            )
+            return [self._inventory_to_dict(r) for r in resp.get("data", [])]
+        except Exception as e:
+            logger.error(
+                f"list_inventory failed for entity {entity_id}: {e}"
+            )
+            raise
+
+    def create_inventory(
+        self,
+        entity_id: int,
+        item_id: int | None = None,
+        name: str | None = None,
+        amount: int | None = None,
+        description: str | None = None,
+        position: str | None = None,
+        is_equipped: bool | None = None,
+        is_hidden: bool | None = None,
+        copy_item_entry: bool | None = None,
+    ) -> InventoryData:
+        """Add an inventory row.
+
+        Either ``item_id`` (Kanka Item type-specific id) or ``name`` (freeform
+        string) should be provided. Both is allowed but redundant.
+        """
+        if item_id is None and not name:
+            raise ValueError(
+                "create_inventory needs either item_id or name (or both)"
+            )
+        # Kanka requires ``entity_id`` in the JSON body as well as in the URL.
+        payload: dict[str, Any] = {"entity_id": entity_id}
+        if item_id is not None:
+            payload["item_id"] = item_id
+        if name is not None:
+            payload["name"] = name
+        if amount is not None:
+            payload["amount"] = amount
+        if description is not None:
+            payload["description"] = description
+        if position is not None:
+            payload["position"] = position
+        if is_equipped is not None:
+            payload["is_equipped"] = is_equipped
+        if is_hidden is not None:
+            payload["visibility_id"] = 2 if is_hidden else 1
+        if copy_item_entry is not None:
+            payload["copy_item_entry"] = copy_item_entry
+        try:
+            resp = self.client._request(
+                "POST", f"entities/{entity_id}/inventory", json=payload
+            )
+            return self._inventory_to_dict(resp.get("data") or {})
+        except Exception as e:
+            logger.error(f"create_inventory failed for entity {entity_id}: {e}")
+            raise
+
+    def update_inventory(
+        self,
+        entity_id: int,
+        inventory_id: int,
+        item_id: int | None = None,
+        name: str | None = None,
+        amount: int | None = None,
+        description: str | None = None,
+        position: str | None = None,
+        is_equipped: bool | None = None,
+        is_hidden: bool | None = None,
+    ) -> InventoryData:
+        """Update an inventory row.
+
+        Kanka's PATCH requires at least one of ``item_id`` or ``name``. If
+        neither is supplied we fetch the current row so partial updates work.
+        """
+        payload: dict[str, Any] = {}
+        if item_id is None and name is None:
+            current = next(
+                (
+                    r
+                    for r in self.list_inventory(entity_id)
+                    if r.get("id") == inventory_id
+                ),
+                None,
+            )
+            if current is None:
+                raise ValueError(
+                    f"inventory row {inventory_id} not found on entity {entity_id}"
+                )
+            if current.get("item_id") is not None:
+                payload["item_id"] = current["item_id"]
+            elif current.get("name"):
+                payload["name"] = current["name"]
+        if item_id is not None:
+            payload["item_id"] = item_id
+        if name is not None:
+            payload["name"] = name
+        if amount is not None:
+            payload["amount"] = amount
+        if description is not None:
+            payload["description"] = description
+        if position is not None:
+            payload["position"] = position
+        if is_equipped is not None:
+            payload["is_equipped"] = is_equipped
+        if is_hidden is not None:
+            payload["visibility_id"] = 2 if is_hidden else 1
+        try:
+            resp = self.client._request(
+                "PATCH",
+                f"entities/{entity_id}/inventory/{inventory_id}",
+                json=payload,
+            )
+            return self._inventory_to_dict(resp.get("data") or {})
+        except Exception as e:
+            logger.error(
+                f"update_inventory failed (entity={entity_id}, "
+                f"row={inventory_id}): {e}"
+            )
+            raise
+
+    def delete_inventory(self, entity_id: int, inventory_id: int) -> bool:
+        try:
+            self.client._request(
+                "DELETE", f"entities/{entity_id}/inventory/{inventory_id}"
+            )
+            return True
+        except Exception as e:
+            logger.error(
+                f"delete_inventory failed (entity={entity_id}, "
+                f"row={inventory_id}): {e}"
+            )
+            raise
+
+    @staticmethod
+    def _inventory_to_dict(raw: dict[str, Any]) -> InventoryData:
+        visibility_id = raw.get("visibility_id")
+        return {
+            "id": raw.get("id"),
+            "entity_id": raw.get("entity_id"),
+            "item_id": raw.get("item_id"),
+            "name": raw.get("name"),
+            "amount": raw.get("amount", 1) or 1,
+            "description": raw.get("description"),
+            "position": raw.get("position"),
+            "is_equipped": bool(raw.get("is_equipped", False)),
+            "is_hidden": visibility_id == 2,
+            "created_at": raw.get("created_at"),
+            "updated_at": raw.get("updated_at"),
+        }
+
+    # =========================================================================
+    # Organisation members (Phase E)
+    # =========================================================================
+    #
+    # Note: the URL uses the organisation's TYPE-specific id, and both
+    # organisation_id and character_id in the payload are type-specific IDs.
+
+    def list_organisation_members(
+        self, organisation_id: int
+    ) -> list[OrganisationMemberData]:
+        try:
+            resp = self.client._request(
+                "GET",
+                f"organisations/{organisation_id}/organisation_members",
+            )
+            return [
+                self._org_member_to_dict(r) for r in resp.get("data", [])
+            ]
+        except Exception as e:
+            logger.error(
+                f"list_organisation_members failed for org "
+                f"{organisation_id}: {e}"
+            )
+            raise
+
+    def create_organisation_member(
+        self,
+        organisation_id: int,
+        character_id: int,
+        role: str | None = None,
+        is_hidden: bool | None = None,
+        parent_id: int | None = None,
+        status_id: int | None = None,
+        pin_id: int | None = None,
+    ) -> OrganisationMemberData:
+        payload: dict[str, Any] = {
+            "organisation_id": organisation_id,
+            "character_id": character_id,
+        }
+        if role is not None:
+            payload["role"] = role
+        if is_hidden is not None:
+            payload["is_private"] = is_hidden
+        if parent_id is not None:
+            payload["parent_id"] = parent_id
+        if status_id is not None:
+            payload["status_id"] = status_id
+        if pin_id is not None:
+            payload["pin_id"] = pin_id
+        try:
+            resp = self.client._request(
+                "POST",
+                f"organisations/{organisation_id}/organisation_members",
+                json=payload,
+            )
+            return self._org_member_to_dict(resp.get("data") or {})
+        except Exception as e:
+            logger.error(
+                f"create_organisation_member failed (org={organisation_id}, "
+                f"char={character_id}): {e}"
+            )
+            raise
+
+    def update_organisation_member(
+        self,
+        organisation_id: int,
+        member_id: int,
+        character_id: int | None = None,
+        role: str | None = None,
+        is_hidden: bool | None = None,
+        parent_id: int | None = None,
+        status_id: int | None = None,
+        pin_id: int | None = None,
+    ) -> OrganisationMemberData:
+        payload: dict[str, Any] = {}
+        if character_id is not None:
+            payload["character_id"] = character_id
+        if role is not None:
+            payload["role"] = role
+        if is_hidden is not None:
+            payload["is_private"] = is_hidden
+        if parent_id is not None:
+            payload["parent_id"] = parent_id
+        if status_id is not None:
+            payload["status_id"] = status_id
+        if pin_id is not None:
+            payload["pin_id"] = pin_id
+        if not payload:
+            raise ValueError(
+                "update_organisation_member needs at least one field to update"
+            )
+        try:
+            resp = self.client._request(
+                "PATCH",
+                f"organisations/{organisation_id}/organisation_members/{member_id}",
+                json=payload,
+            )
+            return self._org_member_to_dict(resp.get("data") or {})
+        except Exception as e:
+            logger.error(
+                f"update_organisation_member failed (org={organisation_id}, "
+                f"row={member_id}): {e}"
+            )
+            raise
+
+    def delete_organisation_member(
+        self, organisation_id: int, member_id: int
+    ) -> bool:
+        try:
+            self.client._request(
+                "DELETE",
+                f"organisations/{organisation_id}/organisation_members/{member_id}",
+            )
+            return True
+        except Exception as e:
+            logger.error(
+                f"delete_organisation_member failed (org={organisation_id}, "
+                f"row={member_id}): {e}"
+            )
+            raise
+
+    @staticmethod
+    def _org_member_to_dict(raw: dict[str, Any]) -> OrganisationMemberData:
+        return {
+            "id": raw.get("id"),
+            "organisation_id": raw.get("organisation_id"),
+            "character_id": raw.get("character_id"),
+            "role": raw.get("role"),
+            "is_hidden": bool(raw.get("is_private", False)),
+            "parent_id": raw.get("parent_id"),
+            "status_id": raw.get("status_id"),
+            "pin_id": raw.get("pin_id"),
+            "created_at": raw.get("created_at"),
+            "updated_at": raw.get("updated_at"),
+        }
+
+    # =========================================================================
+    # Quest elements (Phase E)
+    # =========================================================================
+    #
+    # The URL uses the quest's TYPE-specific id.
+
+    def list_quest_elements(self, quest_id: int) -> list[QuestElementData]:
+        try:
+            resp = self.client._request(
+                "GET", f"quests/{quest_id}/quest_elements"
+            )
+            return [
+                self._quest_element_to_dict(r) for r in resp.get("data", [])
+            ]
+        except Exception as e:
+            logger.error(
+                f"list_quest_elements failed for quest {quest_id}: {e}"
+            )
+            raise
+
+    def create_quest_element(
+        self,
+        quest_id: int,
+        entity_id: int | None = None,
+        name: str | None = None,
+        role: str | None = None,
+        entry: str | None = None,
+        colour: str | None = None,
+        is_hidden: bool | None = None,
+    ) -> QuestElementData:
+        if entity_id is None and not name:
+            raise ValueError(
+                "create_quest_element needs either entity_id or name"
+            )
+        payload: dict[str, Any] = {}
+        if entity_id is not None:
+            payload["entity_id"] = entity_id
+        if name is not None:
+            payload["name"] = name
+        if role is not None:
+            payload["role"] = role
+        if entry is not None:
+            payload["entry"] = self.converter.markdown_to_html(entry)
+        if colour is not None:
+            payload["colour"] = colour
+        if is_hidden is not None:
+            payload["visibility_id"] = 2 if is_hidden else 1
+        try:
+            resp = self.client._request(
+                "POST", f"quests/{quest_id}/quest_elements", json=payload
+            )
+            return self._quest_element_to_dict(resp.get("data") or {})
+        except Exception as e:
+            logger.error(
+                f"create_quest_element failed for quest {quest_id}: {e}"
+            )
+            raise
+
+    def update_quest_element(
+        self,
+        quest_id: int,
+        element_id: int,
+        entity_id: int | None = None,
+        name: str | None = None,
+        role: str | None = None,
+        entry: str | None = None,
+        colour: str | None = None,
+        is_hidden: bool | None = None,
+    ) -> QuestElementData:
+        """Update a quest_element.
+
+        Kanka's PATCH requires at least one of ``entity_id`` or ``name``. If
+        neither is supplied we fetch the current row so partial updates work.
+        """
+        payload: dict[str, Any] = {}
+        if entity_id is None and name is None:
+            current = next(
+                (
+                    r
+                    for r in self.list_quest_elements(quest_id)
+                    if r.get("id") == element_id
+                ),
+                None,
+            )
+            if current is None:
+                raise ValueError(
+                    f"quest_element {element_id} not found on quest {quest_id}"
+                )
+            if current.get("entity_id") is not None:
+                payload["entity_id"] = current["entity_id"]
+            elif current.get("name"):
+                payload["name"] = current["name"]
+        if entity_id is not None:
+            payload["entity_id"] = entity_id
+        if name is not None:
+            payload["name"] = name
+        if role is not None:
+            payload["role"] = role
+        if entry is not None:
+            payload["entry"] = self.converter.markdown_to_html(entry)
+        if colour is not None:
+            payload["colour"] = colour
+        if is_hidden is not None:
+            payload["visibility_id"] = 2 if is_hidden else 1
+        try:
+            resp = self.client._request(
+                "PATCH",
+                f"quests/{quest_id}/quest_elements/{element_id}",
+                json=payload,
+            )
+            return self._quest_element_to_dict(resp.get("data") or {})
+        except Exception as e:
+            logger.error(
+                f"update_quest_element failed (quest={quest_id}, "
+                f"element={element_id}): {e}"
+            )
+            raise
+
+    def delete_quest_element(self, quest_id: int, element_id: int) -> bool:
+        try:
+            self.client._request(
+                "DELETE", f"quests/{quest_id}/quest_elements/{element_id}"
+            )
+            return True
+        except Exception as e:
+            logger.error(
+                f"delete_quest_element failed (quest={quest_id}, "
+                f"element={element_id}): {e}"
+            )
+            raise
+
+    def _quest_element_to_dict(self, raw: dict[str, Any]) -> QuestElementData:
+        visibility_id = raw.get("visibility_id")
+        entry_html = raw.get("entry")
+        return {
+            "id": raw.get("id"),
+            "entity_id": raw.get("entity_id"),
+            "name": raw.get("name"),
+            "role": raw.get("role"),
+            "entry": (
+                self.converter.html_to_markdown(entry_html)
+                if entry_html
+                else None
+            ),
+            "colour": raw.get("colour"),
+            "is_hidden": visibility_id == 2,
             "created_at": raw.get("created_at"),
             "updated_at": raw.get("updated_at"),
         }

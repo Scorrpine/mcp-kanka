@@ -682,3 +682,386 @@ class DeleteRelationResult(TypedDict):
     relation_id: int
     success: bool
     error: str | None
+
+
+# =============================================================================
+# Phase E: entity_abilities (attach ability entities to a character/creature)
+# =============================================================================
+#
+# Endpoint: /entities/{entity_id}/entity_abilities
+# Note: ``ability_id`` is the ability's TYPE-specific id (from
+# ``get_entities`` result's ``id`` field), NOT the entity_id.
+
+
+class EntityAbilityInput(TypedDict, total=False):
+    """Input for attaching an ability to an entity."""
+
+    entity_id: int  # Character/creature (or any entity) that gains the ability.
+    ability_id: int  # Type-specific ID of the ability entity.
+    charges: int | None  # Uses remaining before rest/refresh.
+    note: str | None
+    position: int | None  # Sort order.
+    is_hidden: bool | None  # Admin-only.
+
+
+class EntityAbilityUpdate(TypedDict, total=False):
+    """Update for an existing entity_ability row."""
+
+    entity_id: int
+    entity_ability_id: int  # The row's ID (not the ability entity id).
+    ability_id: int | None
+    charges: int | None
+    note: str | None
+    position: int | None
+    is_hidden: bool | None
+
+
+class EntityAbilityDeletion(TypedDict):
+    """Delete an entity_ability row."""
+
+    entity_id: int
+    entity_ability_id: int
+
+
+class EntityAbilityData(TypedDict, total=False):
+    """Normalized entity_ability row returned to callers."""
+
+    id: int
+    entity_id: int
+    ability_id: int
+    charges: int | None
+    note: str | None
+    position: int
+    is_hidden: bool
+    created_at: str | None
+    updated_at: str | None
+
+
+class ListEntityAbilitiesParams(TypedDict):
+    entity_id: int
+
+
+class ListEntityAbilitiesResult(TypedDict):
+    entity_id: int
+    entity_abilities: list[EntityAbilityData]
+    success: bool
+    error: str | None
+
+
+class CreateEntityAbilitiesParams(TypedDict):
+    items: list[EntityAbilityInput]
+
+
+class CreateEntityAbilityResult(TypedDict):
+    entity_id: int
+    ability_id: int
+    entity_ability_id: int | None
+    success: bool
+    error: str | None
+
+
+class UpdateEntityAbilitiesParams(TypedDict):
+    updates: list[EntityAbilityUpdate]
+
+
+class UpdateEntityAbilityResult(TypedDict):
+    entity_id: int
+    entity_ability_id: int
+    success: bool
+    error: str | None
+
+
+class DeleteEntityAbilitiesParams(TypedDict):
+    deletions: list[EntityAbilityDeletion]
+
+
+class DeleteEntityAbilityResult(TypedDict):
+    entity_id: int
+    entity_ability_id: int
+    success: bool
+    error: str | None
+
+
+# =============================================================================
+# Phase E: inventory (items in an entity's inventory)
+# =============================================================================
+#
+# Endpoint: /entities/{entity_id}/inventory
+# Each row either links to a real Item entity (``item_id`` is that item's
+# type-specific id) OR is a freeform ``name`` string. Not both.
+
+
+class InventoryInput(TypedDict, total=False):
+    """Input for creating an inventory row."""
+
+    entity_id: int
+    item_id: int | None  # Type-specific ID of a Kanka Item. Nullable.
+    name: str | None  # Freeform name if not linking to an Item entity.
+    amount: int | None
+    description: str | None
+    position: str | None  # "backpack", "belt", "left hand", etc.
+    is_equipped: bool | None
+    is_hidden: bool | None
+    copy_item_entry: bool | None  # Copy the Item entity's entry as description.
+
+
+class InventoryUpdate(TypedDict, total=False):
+    entity_id: int
+    inventory_id: int
+    item_id: int | None
+    name: str | None
+    amount: int | None
+    description: str | None
+    position: str | None
+    is_equipped: bool | None
+    is_hidden: bool | None
+
+
+class InventoryDeletion(TypedDict):
+    entity_id: int
+    inventory_id: int
+
+
+class InventoryData(TypedDict, total=False):
+    id: int
+    entity_id: int
+    item_id: int | None
+    name: str | None
+    amount: int
+    description: str | None
+    position: str | None
+    is_equipped: bool
+    is_hidden: bool
+    created_at: str | None
+    updated_at: str | None
+
+
+class ListInventoryParams(TypedDict):
+    entity_id: int
+
+
+class ListInventoryResult(TypedDict):
+    entity_id: int
+    inventory: list[InventoryData]
+    success: bool
+    error: str | None
+
+
+class CreateInventoryParams(TypedDict):
+    items: list[InventoryInput]
+
+
+class CreateInventoryResult(TypedDict):
+    entity_id: int
+    inventory_id: int | None
+    success: bool
+    error: str | None
+
+
+class UpdateInventoryParams(TypedDict):
+    updates: list[InventoryUpdate]
+
+
+class UpdateInventoryResult(TypedDict):
+    entity_id: int
+    inventory_id: int
+    success: bool
+    error: str | None
+
+
+class DeleteInventoryParams(TypedDict):
+    deletions: list[InventoryDeletion]
+
+
+class DeleteInventoryResult(TypedDict):
+    entity_id: int
+    inventory_id: int
+    success: bool
+    error: str | None
+
+
+# =============================================================================
+# Phase E: organisation_members (character-in-organisation memberships)
+# =============================================================================
+#
+# Endpoint: /organisations/{org_type_id}/organisation_members
+# Note: ``organisation_id`` and ``character_id`` are TYPE-specific IDs, not
+# entity_ids. Get them from the ``id`` field of get_entities results.
+
+
+class OrganisationMemberInput(TypedDict, total=False):
+    """Input for adding a character to an organisation."""
+
+    organisation_id: int  # Organisation's type-specific id.
+    character_id: int  # Character's type-specific id.
+    role: str | None
+    is_hidden: bool | None  # Kanka's is_private for this row.
+    parent_id: int | None  # For hierarchical member structures.
+    status_id: int | None
+    pin_id: int | None
+
+
+class OrganisationMemberUpdate(TypedDict, total=False):
+    organisation_id: int
+    member_id: int
+    character_id: int | None
+    role: str | None
+    is_hidden: bool | None
+    parent_id: int | None
+    status_id: int | None
+    pin_id: int | None
+
+
+class OrganisationMemberDeletion(TypedDict):
+    organisation_id: int
+    member_id: int
+
+
+class OrganisationMemberData(TypedDict, total=False):
+    id: int
+    organisation_id: int
+    character_id: int
+    role: str | None
+    is_hidden: bool
+    parent_id: int | None
+    status_id: int | None
+    pin_id: int | None
+    created_at: str | None
+    updated_at: str | None
+
+
+class ListOrganisationMembersParams(TypedDict):
+    organisation_id: int
+
+
+class ListOrganisationMembersResult(TypedDict):
+    organisation_id: int
+    members: list[OrganisationMemberData]
+    success: bool
+    error: str | None
+
+
+class CreateOrganisationMembersParams(TypedDict):
+    items: list[OrganisationMemberInput]
+
+
+class CreateOrganisationMemberResult(TypedDict):
+    organisation_id: int
+    character_id: int
+    member_id: int | None
+    success: bool
+    error: str | None
+
+
+class UpdateOrganisationMembersParams(TypedDict):
+    updates: list[OrganisationMemberUpdate]
+
+
+class UpdateOrganisationMemberResult(TypedDict):
+    organisation_id: int
+    member_id: int
+    success: bool
+    error: str | None
+
+
+class DeleteOrganisationMembersParams(TypedDict):
+    deletions: list[OrganisationMemberDeletion]
+
+
+class DeleteOrganisationMemberResult(TypedDict):
+    organisation_id: int
+    member_id: int
+    success: bool
+    error: str | None
+
+
+# =============================================================================
+# Phase E: quest_elements (entities referenced from a quest)
+# =============================================================================
+#
+# Endpoint: /quests/{quest_type_id}/quest_elements
+
+
+class QuestElementInput(TypedDict, total=False):
+    """Input for adding an element to a quest."""
+
+    quest_id: int  # Quest's type-specific id.
+    entity_id: int | None  # The referenced entity (nullable for freeform).
+    name: str | None  # Optional display override.
+    role: str | None
+    entry: str | None  # Element description.
+    colour: str | None
+    is_hidden: bool | None
+
+
+class QuestElementUpdate(TypedDict, total=False):
+    quest_id: int
+    element_id: int
+    entity_id: int | None
+    name: str | None
+    role: str | None
+    entry: str | None
+    colour: str | None
+    is_hidden: bool | None
+
+
+class QuestElementDeletion(TypedDict):
+    quest_id: int
+    element_id: int
+
+
+class QuestElementData(TypedDict, total=False):
+    id: int
+    entity_id: int | None
+    name: str | None
+    role: str | None
+    entry: str | None
+    colour: str | None
+    is_hidden: bool
+    created_at: str | None
+    updated_at: str | None
+
+
+class ListQuestElementsParams(TypedDict):
+    quest_id: int
+
+
+class ListQuestElementsResult(TypedDict):
+    quest_id: int
+    elements: list[QuestElementData]
+    success: bool
+    error: str | None
+
+
+class CreateQuestElementsParams(TypedDict):
+    items: list[QuestElementInput]
+
+
+class CreateQuestElementResult(TypedDict):
+    quest_id: int
+    entity_id: int | None
+    element_id: int | None
+    success: bool
+    error: str | None
+
+
+class UpdateQuestElementsParams(TypedDict):
+    updates: list[QuestElementUpdate]
+
+
+class UpdateQuestElementResult(TypedDict):
+    quest_id: int
+    element_id: int
+    success: bool
+    error: str | None
+
+
+class DeleteQuestElementsParams(TypedDict):
+    deletions: list[QuestElementDeletion]
+
+
+class DeleteQuestElementResult(TypedDict):
+    quest_id: int
+    element_id: int
+    success: bool
+    error: str | None

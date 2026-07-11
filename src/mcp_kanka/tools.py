@@ -7,19 +7,35 @@ from .operations import get_operations
 from .types import (
     CheckEntityUpdatesResult,
     CreateAttributeResult,
+    CreateEntityAbilityResult,
     CreateEntityResult,
+    CreateInventoryResult,
+    CreateOrganisationMemberResult,
     CreatePostResult,
+    CreateQuestElementResult,
     CreateRelationResult,
     DeleteAttributeResult,
+    DeleteEntityAbilityResult,
     DeleteEntityResult,
+    DeleteInventoryResult,
+    DeleteOrganisationMemberResult,
     DeletePostResult,
+    DeleteQuestElementResult,
     DeleteRelationResult,
     GetEntityResult,
     ListAttributesResult,
+    ListEntityAbilitiesResult,
+    ListInventoryResult,
+    ListOrganisationMembersResult,
+    ListQuestElementsResult,
     ListRelationsResult,
     UpdateAttributeResult,
+    UpdateEntityAbilityResult,
     UpdateEntityResult,
+    UpdateInventoryResult,
+    UpdateOrganisationMemberResult,
     UpdatePostResult,
+    UpdateQuestElementResult,
     UpdateRelationResult,
 )
 
@@ -266,3 +282,133 @@ async def handle_delete_relations(**params: Any) -> list[DeleteRelationResult]:
     deletions = params.get("deletions", [])
     operations = get_operations()
     return await operations.delete_relations(deletions)
+
+
+# =============================================================================
+# Phase E: entity_abilities
+# =============================================================================
+
+
+async def handle_list_entity_abilities(**params: Any) -> ListEntityAbilitiesResult:
+    entity_id = params.get("entity_id")
+    if not entity_id:
+        raise ValueError("entity_id parameter is required")
+    return await get_operations().list_entity_abilities(entity_id)
+
+
+async def handle_create_entity_abilities(
+    **params: Any,
+) -> list[CreateEntityAbilityResult]:
+    return await get_operations().create_entity_abilities(params.get("items", []))
+
+
+async def handle_update_entity_abilities(
+    **params: Any,
+) -> list[UpdateEntityAbilityResult]:
+    return await get_operations().update_entity_abilities(
+        params.get("updates", [])
+    )
+
+
+async def handle_delete_entity_abilities(
+    **params: Any,
+) -> list[DeleteEntityAbilityResult]:
+    return await get_operations().delete_entity_abilities(
+        params.get("deletions", [])
+    )
+
+
+# =============================================================================
+# Phase E: inventory
+# =============================================================================
+
+
+async def handle_list_inventory(**params: Any) -> ListInventoryResult:
+    entity_id = params.get("entity_id")
+    if not entity_id:
+        raise ValueError("entity_id parameter is required")
+    return await get_operations().list_inventory(entity_id)
+
+
+async def handle_create_inventory(**params: Any) -> list[CreateInventoryResult]:
+    return await get_operations().create_inventory(params.get("items", []))
+
+
+async def handle_update_inventory(**params: Any) -> list[UpdateInventoryResult]:
+    return await get_operations().update_inventory(params.get("updates", []))
+
+
+async def handle_delete_inventory(**params: Any) -> list[DeleteInventoryResult]:
+    return await get_operations().delete_inventory(params.get("deletions", []))
+
+
+# =============================================================================
+# Phase E: organisation_members
+# =============================================================================
+
+
+async def handle_list_organisation_members(
+    **params: Any,
+) -> ListOrganisationMembersResult:
+    org_id = params.get("organisation_id")
+    if not org_id:
+        raise ValueError("organisation_id parameter is required")
+    return await get_operations().list_organisation_members(org_id)
+
+
+async def handle_create_organisation_members(
+    **params: Any,
+) -> list[CreateOrganisationMemberResult]:
+    return await get_operations().create_organisation_members(
+        params.get("items", [])
+    )
+
+
+async def handle_update_organisation_members(
+    **params: Any,
+) -> list[UpdateOrganisationMemberResult]:
+    return await get_operations().update_organisation_members(
+        params.get("updates", [])
+    )
+
+
+async def handle_delete_organisation_members(
+    **params: Any,
+) -> list[DeleteOrganisationMemberResult]:
+    return await get_operations().delete_organisation_members(
+        params.get("deletions", [])
+    )
+
+
+# =============================================================================
+# Phase E: quest_elements
+# =============================================================================
+
+
+async def handle_list_quest_elements(**params: Any) -> ListQuestElementsResult:
+    quest_id = params.get("quest_id")
+    if not quest_id:
+        raise ValueError("quest_id parameter is required")
+    return await get_operations().list_quest_elements(quest_id)
+
+
+async def handle_create_quest_elements(
+    **params: Any,
+) -> list[CreateQuestElementResult]:
+    return await get_operations().create_quest_elements(params.get("items", []))
+
+
+async def handle_update_quest_elements(
+    **params: Any,
+) -> list[UpdateQuestElementResult]:
+    return await get_operations().update_quest_elements(
+        params.get("updates", [])
+    )
+
+
+async def handle_delete_quest_elements(
+    **params: Any,
+) -> list[DeleteQuestElementResult]:
+    return await get_operations().delete_quest_elements(
+        params.get("deletions", [])
+    )

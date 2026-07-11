@@ -14,20 +14,36 @@ from .types import (
     VALID_ENTITY_TYPES,
     CheckEntityUpdatesResult,
     CreateAttributeResult,
+    CreateEntityAbilityResult,
     CreateEntityResult,
+    CreateInventoryResult,
+    CreateOrganisationMemberResult,
     CreatePostResult,
+    CreateQuestElementResult,
     CreateRelationResult,
     DeleteAttributeResult,
+    DeleteEntityAbilityResult,
     DeleteEntityResult,
+    DeleteInventoryResult,
+    DeleteOrganisationMemberResult,
     DeletePostResult,
+    DeleteQuestElementResult,
     DeleteRelationResult,
     EntityType,
     GetEntityResult,
     ListAttributesResult,
+    ListEntityAbilitiesResult,
+    ListInventoryResult,
+    ListOrganisationMembersResult,
+    ListQuestElementsResult,
     ListRelationsResult,
     UpdateAttributeResult,
+    UpdateEntityAbilityResult,
     UpdateEntityResult,
+    UpdateInventoryResult,
+    UpdateOrganisationMemberResult,
     UpdatePostResult,
+    UpdateQuestElementResult,
     UpdateRelationResult,
 )
 from .utils import (
@@ -420,6 +436,8 @@ class KankaOperations:
                     is_completed=update.get("is_completed"),
                     image_uuid=update.get("image_uuid"),
                     header_uuid=update.get("header_uuid"),
+                    title=update.get("title"),
+                    race_ids=update.get("race_ids"),
                 )
 
                 result: UpdateEntityResult = {
@@ -1110,6 +1128,675 @@ class KankaOperations:
                     {
                         "entity_id": entity_id,
                         "relation_id": relation_id,
+                        "success": False,
+                        "error": str(e),
+                    }
+                )
+        return results
+
+    # =========================================================================
+    # Entity abilities (Phase E)
+    # =========================================================================
+
+    async def list_entity_abilities(
+        self, entity_id: int
+    ) -> ListEntityAbilitiesResult:
+        try:
+            rows = self.service.list_entity_abilities(entity_id)
+            return {
+                "entity_id": entity_id,
+                "entity_abilities": rows,
+                "success": True,
+                "error": None,
+            }
+        except Exception as e:
+            return {
+                "entity_id": entity_id,
+                "entity_abilities": [],
+                "success": False,
+                "error": str(e),
+            }
+
+    async def create_entity_abilities(
+        self, items: list[dict[str, Any]]
+    ) -> list[CreateEntityAbilityResult]:
+        results: list[CreateEntityAbilityResult] = []
+        for item in items:
+            entity_id = item.get("entity_id")
+            ability_id = item.get("ability_id")
+            if not entity_id or not ability_id:
+                results.append(
+                    {
+                        "entity_id": entity_id or 0,
+                        "ability_id": ability_id or 0,
+                        "entity_ability_id": None,
+                        "success": False,
+                        "error": "entity_id and ability_id are required",
+                    }
+                )
+                continue
+            try:
+                created = self.service.create_entity_ability(
+                    entity_id=entity_id,
+                    ability_id=ability_id,
+                    charges=item.get("charges"),
+                    note=item.get("note"),
+                    position=item.get("position"),
+                    is_hidden=item.get("is_hidden"),
+                )
+                results.append(
+                    {
+                        "entity_id": entity_id,
+                        "ability_id": ability_id,
+                        "entity_ability_id": created.get("id"),
+                        "success": True,
+                        "error": None,
+                    }
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to attach ability {ability_id} to entity "
+                    f"{entity_id}: {e}"
+                )
+                results.append(
+                    {
+                        "entity_id": entity_id,
+                        "ability_id": ability_id,
+                        "entity_ability_id": None,
+                        "success": False,
+                        "error": str(e),
+                    }
+                )
+        return results
+
+    async def update_entity_abilities(
+        self, updates: list[dict[str, Any]]
+    ) -> list[UpdateEntityAbilityResult]:
+        results: list[UpdateEntityAbilityResult] = []
+        for item in updates:
+            entity_id = item.get("entity_id")
+            row_id = item.get("entity_ability_id")
+            if not entity_id or not row_id:
+                results.append(
+                    {
+                        "entity_id": entity_id or 0,
+                        "entity_ability_id": row_id or 0,
+                        "success": False,
+                        "error": (
+                            "entity_id and entity_ability_id are required"
+                        ),
+                    }
+                )
+                continue
+            try:
+                self.service.update_entity_ability(
+                    entity_id=entity_id,
+                    entity_ability_id=row_id,
+                    ability_id=item.get("ability_id"),
+                    charges=item.get("charges"),
+                    note=item.get("note"),
+                    position=item.get("position"),
+                    is_hidden=item.get("is_hidden"),
+                )
+                results.append(
+                    {
+                        "entity_id": entity_id,
+                        "entity_ability_id": row_id,
+                        "success": True,
+                        "error": None,
+                    }
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to update entity_ability {row_id} on entity "
+                    f"{entity_id}: {e}"
+                )
+                results.append(
+                    {
+                        "entity_id": entity_id,
+                        "entity_ability_id": row_id,
+                        "success": False,
+                        "error": str(e),
+                    }
+                )
+        return results
+
+    async def delete_entity_abilities(
+        self, deletions: list[dict[str, Any]]
+    ) -> list[DeleteEntityAbilityResult]:
+        results: list[DeleteEntityAbilityResult] = []
+        for item in deletions:
+            entity_id = item.get("entity_id")
+            row_id = item.get("entity_ability_id")
+            if not entity_id or not row_id:
+                results.append(
+                    {
+                        "entity_id": entity_id or 0,
+                        "entity_ability_id": row_id or 0,
+                        "success": False,
+                        "error": (
+                            "entity_id and entity_ability_id are required"
+                        ),
+                    }
+                )
+                continue
+            try:
+                self.service.delete_entity_ability(entity_id, row_id)
+                results.append(
+                    {
+                        "entity_id": entity_id,
+                        "entity_ability_id": row_id,
+                        "success": True,
+                        "error": None,
+                    }
+                )
+            except Exception as e:
+                results.append(
+                    {
+                        "entity_id": entity_id,
+                        "entity_ability_id": row_id,
+                        "success": False,
+                        "error": str(e),
+                    }
+                )
+        return results
+
+    # =========================================================================
+    # Inventory (Phase E)
+    # =========================================================================
+
+    async def list_inventory(self, entity_id: int) -> ListInventoryResult:
+        try:
+            rows = self.service.list_inventory(entity_id)
+            return {
+                "entity_id": entity_id,
+                "inventory": rows,
+                "success": True,
+                "error": None,
+            }
+        except Exception as e:
+            return {
+                "entity_id": entity_id,
+                "inventory": [],
+                "success": False,
+                "error": str(e),
+            }
+
+    async def create_inventory(
+        self, items: list[dict[str, Any]]
+    ) -> list[CreateInventoryResult]:
+        results: list[CreateInventoryResult] = []
+        for item in items:
+            entity_id = item.get("entity_id")
+            if not entity_id or (
+                item.get("item_id") is None and not item.get("name")
+            ):
+                results.append(
+                    {
+                        "entity_id": entity_id or 0,
+                        "inventory_id": None,
+                        "success": False,
+                        "error": (
+                            "entity_id and one of item_id/name are required"
+                        ),
+                    }
+                )
+                continue
+            try:
+                created = self.service.create_inventory(
+                    entity_id=entity_id,
+                    item_id=item.get("item_id"),
+                    name=item.get("name"),
+                    amount=item.get("amount"),
+                    description=item.get("description"),
+                    position=item.get("position"),
+                    is_equipped=item.get("is_equipped"),
+                    is_hidden=item.get("is_hidden"),
+                    copy_item_entry=item.get("copy_item_entry"),
+                )
+                results.append(
+                    {
+                        "entity_id": entity_id,
+                        "inventory_id": created.get("id"),
+                        "success": True,
+                        "error": None,
+                    }
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to create inventory row on entity {entity_id}: {e}"
+                )
+                results.append(
+                    {
+                        "entity_id": entity_id,
+                        "inventory_id": None,
+                        "success": False,
+                        "error": str(e),
+                    }
+                )
+        return results
+
+    async def update_inventory(
+        self, updates: list[dict[str, Any]]
+    ) -> list[UpdateInventoryResult]:
+        results: list[UpdateInventoryResult] = []
+        for item in updates:
+            entity_id = item.get("entity_id")
+            row_id = item.get("inventory_id")
+            if not entity_id or not row_id:
+                results.append(
+                    {
+                        "entity_id": entity_id or 0,
+                        "inventory_id": row_id or 0,
+                        "success": False,
+                        "error": "entity_id and inventory_id are required",
+                    }
+                )
+                continue
+            try:
+                self.service.update_inventory(
+                    entity_id=entity_id,
+                    inventory_id=row_id,
+                    item_id=item.get("item_id"),
+                    name=item.get("name"),
+                    amount=item.get("amount"),
+                    description=item.get("description"),
+                    position=item.get("position"),
+                    is_equipped=item.get("is_equipped"),
+                    is_hidden=item.get("is_hidden"),
+                )
+                results.append(
+                    {
+                        "entity_id": entity_id,
+                        "inventory_id": row_id,
+                        "success": True,
+                        "error": None,
+                    }
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to update inventory {row_id} on entity "
+                    f"{entity_id}: {e}"
+                )
+                results.append(
+                    {
+                        "entity_id": entity_id,
+                        "inventory_id": row_id,
+                        "success": False,
+                        "error": str(e),
+                    }
+                )
+        return results
+
+    async def delete_inventory(
+        self, deletions: list[dict[str, Any]]
+    ) -> list[DeleteInventoryResult]:
+        results: list[DeleteInventoryResult] = []
+        for item in deletions:
+            entity_id = item.get("entity_id")
+            row_id = item.get("inventory_id")
+            if not entity_id or not row_id:
+                results.append(
+                    {
+                        "entity_id": entity_id or 0,
+                        "inventory_id": row_id or 0,
+                        "success": False,
+                        "error": "entity_id and inventory_id are required",
+                    }
+                )
+                continue
+            try:
+                self.service.delete_inventory(entity_id, row_id)
+                results.append(
+                    {
+                        "entity_id": entity_id,
+                        "inventory_id": row_id,
+                        "success": True,
+                        "error": None,
+                    }
+                )
+            except Exception as e:
+                results.append(
+                    {
+                        "entity_id": entity_id,
+                        "inventory_id": row_id,
+                        "success": False,
+                        "error": str(e),
+                    }
+                )
+        return results
+
+    # =========================================================================
+    # Organisation members (Phase E)
+    # =========================================================================
+
+    async def list_organisation_members(
+        self, organisation_id: int
+    ) -> ListOrganisationMembersResult:
+        try:
+            rows = self.service.list_organisation_members(organisation_id)
+            return {
+                "organisation_id": organisation_id,
+                "members": rows,
+                "success": True,
+                "error": None,
+            }
+        except Exception as e:
+            return {
+                "organisation_id": organisation_id,
+                "members": [],
+                "success": False,
+                "error": str(e),
+            }
+
+    async def create_organisation_members(
+        self, items: list[dict[str, Any]]
+    ) -> list[CreateOrganisationMemberResult]:
+        results: list[CreateOrganisationMemberResult] = []
+        for item in items:
+            org_id = item.get("organisation_id")
+            char_id = item.get("character_id")
+            if not org_id or not char_id:
+                results.append(
+                    {
+                        "organisation_id": org_id or 0,
+                        "character_id": char_id or 0,
+                        "member_id": None,
+                        "success": False,
+                        "error": (
+                            "organisation_id and character_id are required"
+                        ),
+                    }
+                )
+                continue
+            try:
+                created = self.service.create_organisation_member(
+                    organisation_id=org_id,
+                    character_id=char_id,
+                    role=item.get("role"),
+                    is_hidden=item.get("is_hidden"),
+                    parent_id=item.get("parent_id"),
+                    status_id=item.get("status_id"),
+                    pin_id=item.get("pin_id"),
+                )
+                results.append(
+                    {
+                        "organisation_id": org_id,
+                        "character_id": char_id,
+                        "member_id": created.get("id"),
+                        "success": True,
+                        "error": None,
+                    }
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to add char {char_id} to org {org_id}: {e}"
+                )
+                results.append(
+                    {
+                        "organisation_id": org_id,
+                        "character_id": char_id,
+                        "member_id": None,
+                        "success": False,
+                        "error": str(e),
+                    }
+                )
+        return results
+
+    async def update_organisation_members(
+        self, updates: list[dict[str, Any]]
+    ) -> list[UpdateOrganisationMemberResult]:
+        results: list[UpdateOrganisationMemberResult] = []
+        for item in updates:
+            org_id = item.get("organisation_id")
+            member_id = item.get("member_id")
+            if not org_id or not member_id:
+                results.append(
+                    {
+                        "organisation_id": org_id or 0,
+                        "member_id": member_id or 0,
+                        "success": False,
+                        "error": (
+                            "organisation_id and member_id are required"
+                        ),
+                    }
+                )
+                continue
+            try:
+                self.service.update_organisation_member(
+                    organisation_id=org_id,
+                    member_id=member_id,
+                    character_id=item.get("character_id"),
+                    role=item.get("role"),
+                    is_hidden=item.get("is_hidden"),
+                    parent_id=item.get("parent_id"),
+                    status_id=item.get("status_id"),
+                    pin_id=item.get("pin_id"),
+                )
+                results.append(
+                    {
+                        "organisation_id": org_id,
+                        "member_id": member_id,
+                        "success": True,
+                        "error": None,
+                    }
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to update org member {member_id} on org "
+                    f"{org_id}: {e}"
+                )
+                results.append(
+                    {
+                        "organisation_id": org_id,
+                        "member_id": member_id,
+                        "success": False,
+                        "error": str(e),
+                    }
+                )
+        return results
+
+    async def delete_organisation_members(
+        self, deletions: list[dict[str, Any]]
+    ) -> list[DeleteOrganisationMemberResult]:
+        results: list[DeleteOrganisationMemberResult] = []
+        for item in deletions:
+            org_id = item.get("organisation_id")
+            member_id = item.get("member_id")
+            if not org_id or not member_id:
+                results.append(
+                    {
+                        "organisation_id": org_id or 0,
+                        "member_id": member_id or 0,
+                        "success": False,
+                        "error": (
+                            "organisation_id and member_id are required"
+                        ),
+                    }
+                )
+                continue
+            try:
+                self.service.delete_organisation_member(org_id, member_id)
+                results.append(
+                    {
+                        "organisation_id": org_id,
+                        "member_id": member_id,
+                        "success": True,
+                        "error": None,
+                    }
+                )
+            except Exception as e:
+                results.append(
+                    {
+                        "organisation_id": org_id,
+                        "member_id": member_id,
+                        "success": False,
+                        "error": str(e),
+                    }
+                )
+        return results
+
+    # =========================================================================
+    # Quest elements (Phase E)
+    # =========================================================================
+
+    async def list_quest_elements(
+        self, quest_id: int
+    ) -> ListQuestElementsResult:
+        try:
+            rows = self.service.list_quest_elements(quest_id)
+            return {
+                "quest_id": quest_id,
+                "elements": rows,
+                "success": True,
+                "error": None,
+            }
+        except Exception as e:
+            return {
+                "quest_id": quest_id,
+                "elements": [],
+                "success": False,
+                "error": str(e),
+            }
+
+    async def create_quest_elements(
+        self, items: list[dict[str, Any]]
+    ) -> list[CreateQuestElementResult]:
+        results: list[CreateQuestElementResult] = []
+        for item in items:
+            quest_id = item.get("quest_id")
+            entity_id = item.get("entity_id")
+            name = item.get("name")
+            if not quest_id or (entity_id is None and not name):
+                results.append(
+                    {
+                        "quest_id": quest_id or 0,
+                        "entity_id": entity_id,
+                        "element_id": None,
+                        "success": False,
+                        "error": (
+                            "quest_id required; one of entity_id/name required"
+                        ),
+                    }
+                )
+                continue
+            try:
+                created = self.service.create_quest_element(
+                    quest_id=quest_id,
+                    entity_id=entity_id,
+                    name=name,
+                    role=item.get("role"),
+                    entry=item.get("entry"),
+                    colour=item.get("colour"),
+                    is_hidden=item.get("is_hidden"),
+                )
+                results.append(
+                    {
+                        "quest_id": quest_id,
+                        "entity_id": entity_id,
+                        "element_id": created.get("id"),
+                        "success": True,
+                        "error": None,
+                    }
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to create quest_element on quest {quest_id}: {e}"
+                )
+                results.append(
+                    {
+                        "quest_id": quest_id,
+                        "entity_id": entity_id,
+                        "element_id": None,
+                        "success": False,
+                        "error": str(e),
+                    }
+                )
+        return results
+
+    async def update_quest_elements(
+        self, updates: list[dict[str, Any]]
+    ) -> list[UpdateQuestElementResult]:
+        results: list[UpdateQuestElementResult] = []
+        for item in updates:
+            quest_id = item.get("quest_id")
+            element_id = item.get("element_id")
+            if not quest_id or not element_id:
+                results.append(
+                    {
+                        "quest_id": quest_id or 0,
+                        "element_id": element_id or 0,
+                        "success": False,
+                        "error": "quest_id and element_id are required",
+                    }
+                )
+                continue
+            try:
+                self.service.update_quest_element(
+                    quest_id=quest_id,
+                    element_id=element_id,
+                    entity_id=item.get("entity_id"),
+                    name=item.get("name"),
+                    role=item.get("role"),
+                    entry=item.get("entry"),
+                    colour=item.get("colour"),
+                    is_hidden=item.get("is_hidden"),
+                )
+                results.append(
+                    {
+                        "quest_id": quest_id,
+                        "element_id": element_id,
+                        "success": True,
+                        "error": None,
+                    }
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to update quest_element {element_id} on quest "
+                    f"{quest_id}: {e}"
+                )
+                results.append(
+                    {
+                        "quest_id": quest_id,
+                        "element_id": element_id,
+                        "success": False,
+                        "error": str(e),
+                    }
+                )
+        return results
+
+    async def delete_quest_elements(
+        self, deletions: list[dict[str, Any]]
+    ) -> list[DeleteQuestElementResult]:
+        results: list[DeleteQuestElementResult] = []
+        for item in deletions:
+            quest_id = item.get("quest_id")
+            element_id = item.get("element_id")
+            if not quest_id or not element_id:
+                results.append(
+                    {
+                        "quest_id": quest_id or 0,
+                        "element_id": element_id or 0,
+                        "success": False,
+                        "error": "quest_id and element_id are required",
+                    }
+                )
+                continue
+            try:
+                self.service.delete_quest_element(quest_id, element_id)
+                results.append(
+                    {
+                        "quest_id": quest_id,
+                        "element_id": element_id,
+                        "success": True,
+                        "error": None,
+                    }
+                )
+            except Exception as e:
+                results.append(
+                    {
+                        "quest_id": quest_id,
+                        "element_id": element_id,
                         "success": False,
                         "error": str(e),
                     }

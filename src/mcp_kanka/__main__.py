@@ -21,19 +21,35 @@ from .tools import (
     handle_check_entity_updates,
     handle_create_attributes,
     handle_create_entities,
+    handle_create_entity_abilities,
+    handle_create_inventory,
+    handle_create_organisation_members,
     handle_create_posts,
+    handle_create_quest_elements,
     handle_create_relations,
     handle_delete_attributes,
     handle_delete_entities,
+    handle_delete_entity_abilities,
+    handle_delete_inventory,
+    handle_delete_organisation_members,
     handle_delete_posts,
+    handle_delete_quest_elements,
     handle_delete_relations,
     handle_find_entities,
     handle_get_entities,
     handle_list_attributes,
+    handle_list_entity_abilities,
+    handle_list_inventory,
+    handle_list_organisation_members,
+    handle_list_quest_elements,
     handle_list_relations,
     handle_update_attributes,
     handle_update_entities,
+    handle_update_entity_abilities,
+    handle_update_inventory,
+    handle_update_organisation_members,
     handle_update_posts,
+    handle_update_quest_elements,
     handle_update_relations,
 )
 from .types import VALID_ATTRIBUTE_TYPES, VALID_ENTITY_TYPES
@@ -220,6 +236,22 @@ async def list_tools() -> list[types.Tool]:
                                 },
                                 "tags": {"type": "array", "items": {"type": "string"}},
                                 "is_hidden": {"type": "boolean"},
+                                "title": {
+                                    "type": "string",
+                                    "description": (
+                                        "Character title, e.g. 'The Wise'. "
+                                        "Characters only; ignored on other types."
+                                    ),
+                                },
+                                "race_ids": {
+                                    "type": "array",
+                                    "items": {"type": "integer"},
+                                    "description": (
+                                        "Race TYPE-specific ids (from "
+                                        "get_entities' `id` field). Characters "
+                                        "only; sets the character's races."
+                                    ),
+                                },
                             },
                             "required": ["entity_id", "name"],
                         },
@@ -667,6 +699,428 @@ async def list_tools() -> list[types.Tool]:
                 "required": ["deletions"],
             },
         ),
+        # =============================================================
+        # Phase E: entity_abilities
+        # =============================================================
+        types.Tool(
+            name="list_entity_abilities",
+            description=(
+                "List all ability attachments on an entity. Each row links "
+                "the entity to an ability entity and tracks charges + notes."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "entity_id": {"type": "integer"},
+                },
+                "required": ["entity_id"],
+            },
+        ),
+        types.Tool(
+            name="create_entity_abilities",
+            description=(
+                "Attach ability entities to characters/creatures. Note: "
+                "`ability_id` is the ability's TYPE-specific id (from "
+                "get_entities' `id` field), not the entity_id."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "entity_id": {"type": "integer"},
+                                "ability_id": {
+                                    "type": "integer",
+                                    "description": (
+                                        "Type-specific id of the ability"
+                                    ),
+                                },
+                                "charges": {"type": "integer"},
+                                "note": {"type": "string"},
+                                "position": {"type": "integer"},
+                                "is_hidden": {"type": "boolean"},
+                            },
+                            "required": ["entity_id", "ability_id"],
+                        },
+                    },
+                },
+                "required": ["items"],
+            },
+        ),
+        types.Tool(
+            name="update_entity_abilities",
+            description="Update existing entity_ability rows",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "updates": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "entity_id": {"type": "integer"},
+                                "entity_ability_id": {"type": "integer"},
+                                "ability_id": {"type": "integer"},
+                                "charges": {"type": "integer"},
+                                "note": {"type": "string"},
+                                "position": {"type": "integer"},
+                                "is_hidden": {"type": "boolean"},
+                            },
+                            "required": ["entity_id", "entity_ability_id"],
+                        },
+                    },
+                },
+                "required": ["updates"],
+            },
+        ),
+        types.Tool(
+            name="delete_entity_abilities",
+            description="Remove ability attachments from entities",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "deletions": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "entity_id": {"type": "integer"},
+                                "entity_ability_id": {"type": "integer"},
+                            },
+                            "required": ["entity_id", "entity_ability_id"],
+                        },
+                    },
+                },
+                "required": ["deletions"],
+            },
+        ),
+        # =============================================================
+        # Phase E: inventory
+        # =============================================================
+        types.Tool(
+            name="list_inventory",
+            description="List all inventory rows for an entity",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "entity_id": {"type": "integer"},
+                },
+                "required": ["entity_id"],
+            },
+        ),
+        types.Tool(
+            name="create_inventory",
+            description=(
+                "Add inventory rows to an entity. Each row either links to a "
+                "Kanka Item (via item_id, TYPE-specific id) or is a freeform "
+                "name string. At least one of item_id / name is required."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "entity_id": {"type": "integer"},
+                                "item_id": {
+                                    "type": "integer",
+                                    "description": (
+                                        "Kanka Item's TYPE-specific id (nullable)"
+                                    ),
+                                },
+                                "name": {
+                                    "type": "string",
+                                    "description": (
+                                        "Freeform name if no item_id"
+                                    ),
+                                },
+                                "amount": {"type": "integer"},
+                                "description": {"type": "string"},
+                                "position": {
+                                    "type": "string",
+                                    "description": (
+                                        "Freeform location: 'backpack', "
+                                        "'belt', 'left hand', etc."
+                                    ),
+                                },
+                                "is_equipped": {"type": "boolean"},
+                                "is_hidden": {"type": "boolean"},
+                                "copy_item_entry": {
+                                    "type": "boolean",
+                                    "description": (
+                                        "Copy the Item entity's entry as "
+                                        "the description"
+                                    ),
+                                },
+                            },
+                            "required": ["entity_id"],
+                        },
+                    },
+                },
+                "required": ["items"],
+            },
+        ),
+        types.Tool(
+            name="update_inventory",
+            description="Update existing inventory rows",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "updates": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "entity_id": {"type": "integer"},
+                                "inventory_id": {"type": "integer"},
+                                "item_id": {"type": "integer"},
+                                "name": {"type": "string"},
+                                "amount": {"type": "integer"},
+                                "description": {"type": "string"},
+                                "position": {"type": "string"},
+                                "is_equipped": {"type": "boolean"},
+                                "is_hidden": {"type": "boolean"},
+                            },
+                            "required": ["entity_id", "inventory_id"],
+                        },
+                    },
+                },
+                "required": ["updates"],
+            },
+        ),
+        types.Tool(
+            name="delete_inventory",
+            description="Remove inventory rows",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "deletions": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "entity_id": {"type": "integer"},
+                                "inventory_id": {"type": "integer"},
+                            },
+                            "required": ["entity_id", "inventory_id"],
+                        },
+                    },
+                },
+                "required": ["deletions"],
+            },
+        ),
+        # =============================================================
+        # Phase E: organisation_members
+        # =============================================================
+        types.Tool(
+            name="list_organisation_members",
+            description=(
+                "List members of an organisation. Note: organisation_id is "
+                "the organisation's TYPE-specific id (from get_entities' "
+                "`id` field), not entity_id."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "organisation_id": {"type": "integer"},
+                },
+                "required": ["organisation_id"],
+            },
+        ),
+        types.Tool(
+            name="create_organisation_members",
+            description=(
+                "Add characters as members of an organisation. Both "
+                "organisation_id and character_id are TYPE-specific ids."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "organisation_id": {"type": "integer"},
+                                "character_id": {"type": "integer"},
+                                "role": {"type": "string"},
+                                "is_hidden": {"type": "boolean"},
+                                "parent_id": {
+                                    "type": "integer",
+                                    "description": (
+                                        "For hierarchical org structures"
+                                    ),
+                                },
+                                "status_id": {"type": "integer"},
+                                "pin_id": {"type": "integer"},
+                            },
+                            "required": ["organisation_id", "character_id"],
+                        },
+                    },
+                },
+                "required": ["items"],
+            },
+        ),
+        types.Tool(
+            name="update_organisation_members",
+            description="Update existing organisation membership rows",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "updates": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "organisation_id": {"type": "integer"},
+                                "member_id": {"type": "integer"},
+                                "character_id": {"type": "integer"},
+                                "role": {"type": "string"},
+                                "is_hidden": {"type": "boolean"},
+                                "parent_id": {"type": "integer"},
+                                "status_id": {"type": "integer"},
+                                "pin_id": {"type": "integer"},
+                            },
+                            "required": ["organisation_id", "member_id"],
+                        },
+                    },
+                },
+                "required": ["updates"],
+            },
+        ),
+        types.Tool(
+            name="delete_organisation_members",
+            description="Remove organisation memberships",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "deletions": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "organisation_id": {"type": "integer"},
+                                "member_id": {"type": "integer"},
+                            },
+                            "required": ["organisation_id", "member_id"],
+                        },
+                    },
+                },
+                "required": ["deletions"],
+            },
+        ),
+        # =============================================================
+        # Phase E: quest_elements
+        # =============================================================
+        types.Tool(
+            name="list_quest_elements",
+            description=(
+                "List elements referenced from a quest. Note: quest_id is "
+                "the quest's TYPE-specific id."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "quest_id": {"type": "integer"},
+                },
+                "required": ["quest_id"],
+            },
+        ),
+        types.Tool(
+            name="create_quest_elements",
+            description=(
+                "Add elements to a quest (link entities or add freeform "
+                "named elements). Either entity_id or name is required."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "quest_id": {"type": "integer"},
+                                "entity_id": {
+                                    "type": "integer",
+                                    "description": "Linked entity (nullable)",
+                                },
+                                "name": {
+                                    "type": "string",
+                                    "description": (
+                                        "Display name (freeform if no entity)"
+                                    ),
+                                },
+                                "role": {"type": "string"},
+                                "entry": {
+                                    "type": "string",
+                                    "description": (
+                                        "Element description in Markdown"
+                                    ),
+                                },
+                                "colour": {"type": "string"},
+                                "is_hidden": {"type": "boolean"},
+                            },
+                            "required": ["quest_id"],
+                        },
+                    },
+                },
+                "required": ["items"],
+            },
+        ),
+        types.Tool(
+            name="update_quest_elements",
+            description="Update existing quest elements",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "updates": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "quest_id": {"type": "integer"},
+                                "element_id": {"type": "integer"},
+                                "entity_id": {"type": "integer"},
+                                "name": {"type": "string"},
+                                "role": {"type": "string"},
+                                "entry": {"type": "string"},
+                                "colour": {"type": "string"},
+                                "is_hidden": {"type": "boolean"},
+                            },
+                            "required": ["quest_id", "element_id"],
+                        },
+                    },
+                },
+                "required": ["updates"],
+            },
+        ),
+        types.Tool(
+            name="delete_quest_elements",
+            description="Remove elements from a quest",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "deletions": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "quest_id": {"type": "integer"},
+                                "element_id": {"type": "integer"},
+                            },
+                            "required": ["quest_id", "element_id"],
+                        },
+                    },
+                },
+                "required": ["deletions"],
+            },
+        ),
     ]
 
 
@@ -711,6 +1165,39 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
             result = await handle_update_relations(**arguments)
         elif name == "delete_relations":
             result = await handle_delete_relations(**arguments)
+        # Phase E: sub-resources
+        elif name == "list_entity_abilities":
+            result = await handle_list_entity_abilities(**arguments)
+        elif name == "create_entity_abilities":
+            result = await handle_create_entity_abilities(**arguments)
+        elif name == "update_entity_abilities":
+            result = await handle_update_entity_abilities(**arguments)
+        elif name == "delete_entity_abilities":
+            result = await handle_delete_entity_abilities(**arguments)
+        elif name == "list_inventory":
+            result = await handle_list_inventory(**arguments)
+        elif name == "create_inventory":
+            result = await handle_create_inventory(**arguments)
+        elif name == "update_inventory":
+            result = await handle_update_inventory(**arguments)
+        elif name == "delete_inventory":
+            result = await handle_delete_inventory(**arguments)
+        elif name == "list_organisation_members":
+            result = await handle_list_organisation_members(**arguments)
+        elif name == "create_organisation_members":
+            result = await handle_create_organisation_members(**arguments)
+        elif name == "update_organisation_members":
+            result = await handle_update_organisation_members(**arguments)
+        elif name == "delete_organisation_members":
+            result = await handle_delete_organisation_members(**arguments)
+        elif name == "list_quest_elements":
+            result = await handle_list_quest_elements(**arguments)
+        elif name == "create_quest_elements":
+            result = await handle_create_quest_elements(**arguments)
+        elif name == "update_quest_elements":
+            result = await handle_update_quest_elements(**arguments)
+        elif name == "delete_quest_elements":
+            result = await handle_delete_quest_elements(**arguments)
         else:
             raise ValueError(f"Unknown tool: {name}")
 
